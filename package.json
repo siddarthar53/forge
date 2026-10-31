@@ -1,13 +1,14 @@
 {
   "name": "coding-agent",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "this is a coding agent which i am trying to build so i learn agentic AI",
   "license": "ISC",
   "author": "sid",
   "type": "module",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "test": "node --test"
   },
   "dependencies": {
     "diff": "^9.0.0",

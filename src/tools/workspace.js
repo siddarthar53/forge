@@ -32,6 +32,16 @@ export function displayPath(cwd, absolute) {
   return path.relative(cwd, absolute).split(path.sep).join("/") || ".";
 }
 
+// The file tools never write into these folders: .git is git's database, and
+// .devpilot holds session logs and settings (an allow-list the model must
+// not be able to edit for itself).
+const PROTECTED_DIRS = new Set([".git", ".devpilot"]);
+
+export function isProtectedPath(cwd, absolute) {
+  const first = path.relative(cwd, absolute).split(path.sep)[0];
+  return PROTECTED_DIRS.has(first);
+}
+
 // .env files hold API keys. Never send their contents to the model.
 export function isSecretFile(absolute) {
   return /^\.env(\..*)?$/.test(path.basename(absolute));

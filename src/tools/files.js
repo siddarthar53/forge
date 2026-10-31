@@ -1,9 +1,11 @@
+import { spawnSync } from "node:child_process";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { renderDiff } from "../ui.js";
 import {
   IGNORED_DIRS,
   displayPath,
+  isProtectedPath,
   isSecretFile,
   looksBinary,
   resolveInWorkspace,
@@ -15,8 +17,27 @@ const MAX_LIST_RESULTS = 200;
 const MAX_GREP_MATCHES = 100;
 const MAX_GREP_FILE_BYTES = 1_000_000;
 
+// Drop files that .gitignore excludes (build output, logs, caches...), so
+// list_files and grep show what a developer would consider "the code".
+// `git check-ignore` applies every .gitignore rule for us; -z separates paths
+// with NUL so odd file names survive. Exit codes: 0 = some paths ignored,
+// 1 = none ignored, anything else = not a git repo or no git: keep everything.
+function removeGitIgnored(cwd, files) {
+  if (files.length === 0) return files;
+  const result = spawnSync("git", ["check-ignore", "-z", "--stdin"], {
+    cwd,
+    input: files.join("\0"),
+    encoding: "utf8",
+    maxBuffer: 64 * 1024 * 1024,
+  });
+  if (result.status !== 0) return files;
+  const ignored = new Set(result.stdout.split("\0").filter(Boolean));
+  return files.filter((file) => !ignored.has(file));
+}
+
 // Shared helper: walk the workspace with Node's built-in glob, skipping
-// ignored folders. Returns paths relative to cwd, using forward slashes.
+// ignored folders and .gitignored files. Returns paths relative to cwd,
+// using forward slashes.
 async function findFiles(cwd, pattern) {
   const results = [];
   for await (const entry of fs.glob(pattern, {
@@ -29,7 +50,7 @@ async function findFiles(cwd, pattern) {
       results.push(displayPath(cwd, path.join(entry.parentPath, entry.name)));
     }
   }
-  return results.sort();
+  return removeGitIgnored(cwd, results).sort();
 }
 
 // ---------------------------------------------------------------- read_file
@@ -88,7 +109,8 @@ export const listFiles = {
   name: "list_files",
   description:
     "Find files by glob pattern, e.g. `**/*.js` or `src/**/*.test.ts`. " +
-    "Skips node_modules, .git and build folders. Use this to explore the project.",
+    "Skips node_modules, .git, build folders and anything in .gitignore. " +
+    "Use this to explore the project.",
   parameters: {
     type: "object",
     properties: {
@@ -179,16 +201,30 @@ async function fileExists(absolute) {
   return fs.access(absolute).then(() => true, () => false);
 }
 
+function assertWritable(absolute, ctx) {
+  if (isSecretFile(absolute)) throw new Error("Refusing to change a .env file: it contains secrets.");
+  if (isProtectedPath(ctx.cwd, absolute)) {
+    throw new Error("Refusing to write inside .git or .devpilot; those folders are managed by git and DevPilot.");
+  }
+}
+
 // Show the diff, ask the user, write if approved. Shared by write and edit.
 async function applyChange({ absolute, oldText, newText, ctx }) {
   const shownPath = displayPath(ctx.cwd, absolute);
-  const decision = await ctx.approve({
-    key: "edit", // "always" approves all file changes for this session
-    title: `${oldText === "" ? "Create" : "Edit"} ${shownPath}`,
-    preview: renderDiff(shownPath, oldText, newText),
-    alwaysLabel: "always allow file edits this session",
-  });
+  const decision = await ctx.approve(
+    {
+      key: "edit", // "always" approves all file changes for this session
+      title: `${oldText === "" ? "Create" : "Edit"} ${shownPath}`,
+      preview: renderDiff(shownPath, oldText, newText),
+      alwaysLabel: "always allow file edits this session",
+    },
+    ctx.signal
+  );
   if (!decision.allowed) return decision.message;
+
+  // Tier 2: save the old version for /undo, and maybe move to a work branch.
+  // The hook returns a note for the model, or nothing.
+  const note = ctx.beforeWrite ? await ctx.beforeWrite(absolute) : null;
 
   await fs.mkdir(path.dirname(absolute), { recursive: true });
   await fs.writeFile(absolute, newText, "utf8");
@@ -196,7 +232,7 @@ async function applyChange({ absolute, oldText, newText, ctx }) {
   // Our own write is not an "outside change": record the new timestamp.
   const { mtimeMs } = await fs.stat(absolute);
   ctx.readFiles.set(absolute, mtimeMs);
-  return `Wrote ${shownPath}.`;
+  return note ? `Wrote ${shownPath}.\n${note}` : `Wrote ${shownPath}.`;
 }
 
 export const writeFile = {
@@ -217,7 +253,7 @@ export const writeFile = {
 
   async run({ path: filePath, content }, ctx) {
     const absolute = resolveInWorkspace(ctx.cwd, filePath);
-    if (isSecretFile(absolute)) throw new Error("Refusing to write a .env file.");
+    assertWritable(absolute, ctx);
 
     let oldText = "";
     if (await fileExists(absolute)) {
@@ -260,7 +296,7 @@ export const editFile = {
 
   async run({ path: filePath, old_string, new_string, replace_all = false }, ctx) {
     const absolute = resolveInWorkspace(ctx.cwd, filePath);
-    if (isSecretFile(absolute)) throw new Error("Refusing to edit a .env file.");
+    assertWritable(absolute, ctx);
     if (old_string === new_string) throw new Error("old_string and new_string are identical.");
     if (old_string === "") throw new Error("old_string is empty; use write_file to create files.");
 
