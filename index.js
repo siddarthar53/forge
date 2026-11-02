@@ -3,6 +3,7 @@ import dotenv from "dotenv";
 import { fileURLToPath } from "node:url";
 import OpenAI from "openai";
 import { startChat } from "./src/chat.js";
+import { startRpc } from "./src/rpc.js";
 
 // 1. Load .env from DevPilot's own folder, not from the project you run it in.
 //    That way you can `cd` into any repo and run DevPilot there.
@@ -15,16 +16,18 @@ Usage:
   devpilot --continue, -c     continue the most recent conversation
   devpilot --resume, -r       pick a saved conversation to continue
   devpilot --resume <file>    continue a specific .devpilot/sessions/*.jsonl
+  devpilot --rpc              JSON-lines mode for editors (used by the VS Code extension)
 
 Inside DevPilot, type /help for the slash commands.`;
 
 // 2. Command-line flags
 function parseArgs(argv) {
-  const args = { resume: null, help: false };
+  const args = { resume: null, help: false, rpc: false };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === "-h" || arg === "--help") args.help = true;
     else if (arg === "-c" || arg === "--continue") args.resume = "latest";
+    else if (arg === "--rpc") args.rpc = true;
     else if (arg === "-r" || arg === "--resume") {
       const next = argv[i + 1];
       if (next && !next.startsWith("-")) {
@@ -74,6 +77,7 @@ function loadConfig(args) {
 
 // 5. Application entry point
 async function main() {
+  const rpc = process.argv.includes("--rpc");
   try {
     const args = parseArgs(process.argv.slice(2));
     if (args.help) {
@@ -84,8 +88,11 @@ async function main() {
 
     // OpenRouter speaks the OpenAI API format.
     const client = new OpenAI({ baseURL: config.baseURL, apiKey: config.apiKey });
-    await startChat({ client, config });
+    if (args.rpc) await startRpc({ client, config });
+    else await startChat({ client, config });
   } catch (error) {
+    // In RPC mode the editor reads stdout, so say it there as JSON too.
+    if (rpc) process.stdout.write(JSON.stringify({ type: "fatal", message: error.message }) + "\n");
     console.error("DevPilot failed:", error.message);
     process.exitCode = 1;
   }

@@ -1,3 +1,5 @@
 node_modules/
 .env
 .devpilot/
+vscode-extension/agent/
+*.vsix

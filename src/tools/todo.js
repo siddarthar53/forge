@@ -64,7 +64,7 @@ export const todoWrite = {
 
     const list = todos.map(({ content, status }) => ({ content: content.trim(), status }));
     ctx.session.setTodos(list);
-    console.log(renderTodos(list));
+    if (ctx.printTodos !== false) console.log(renderTodos(list)); // VS Code shows its own list
 
     const done = list.filter((t) => t.status === "completed").length;
     return `Todo list updated (${done}/${list.length} completed):\n${todosAsText(list)}`;

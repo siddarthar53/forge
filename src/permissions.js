@@ -10,8 +10,11 @@ import { color } from "./ui.js";
 //   anything else: don't run it, and pass the text to the model as feedback
 //
 // `ask` is a function that prints a question and resolves to the typed answer.
-// `signal` lets Ctrl+C cancel a pending question.
-export function createPermissions({ ask }) {
+// `signal` lets Ctrl+C cancel a pending question. A front end that has its
+// own UI for approvals (VS Code) passes `askApproval(request, { canAlways },
+// signal)` instead, which resolves to the same kind of answer: "y", "n",
+// "a" or feedback text.
+export function createPermissions({ ask, askApproval = null }) {
   const alwaysAllowed = new Set();
 
   // Sub-agents can run in parallel, and two of them may want permission at
@@ -23,18 +26,24 @@ export function createPermissions({ ask }) {
     return turn;
   };
 
-  async function prompt({ key, title, preview, alwaysLabel }, signal) {
-    if (preview) console.log(`\n${preview}\n`);
-
+  async function prompt(request, signal) {
+    const { key, title, preview, alwaysLabel } = request;
     const canAlways = Boolean(key && alwaysLabel);
     if (canAlways && alwaysAllowed.has(key)) {
+      if (!askApproval && preview) console.log(`\n${preview}\n`);
       console.log(color.dim(`  ✓ ${title} (allowed for this session)`));
       return { allowed: true };
     }
 
-    const options = canAlways ? `[y] yes  [n] no  [a] ${alwaysLabel}` : "[y] yes  [n] no";
-    const question = `${color.yellow("?")} ${color.bold(title)}\n  ${options}  (or type feedback)\n  > `;
-    const answer = (await ask(question, signal)).trim();
+    let answer;
+    if (askApproval) {
+      answer = String(await askApproval(request, { canAlways }, signal)).trim();
+    } else {
+      if (preview) console.log(`\n${preview}\n`);
+      const options = canAlways ? `[y] yes  [n] no  [a] ${alwaysLabel}` : "[y] yes  [n] no";
+      const question = `${color.yellow("?")} ${color.bold(title)}\n  ${options}  (or type feedback)\n  > `;
+      answer = (await ask(question, signal)).trim();
+    }
     const choice = answer.toLowerCase();
 
     if (choice === "y" || choice === "yes") return { allowed: true };

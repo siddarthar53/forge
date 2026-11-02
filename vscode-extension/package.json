@@ -1,0 +1,138 @@
+{
+  "name": "devpilot",
+  "displayName": "DevPilot",
+  "description": "DevPilot coding agent in VS Code: chat, approve edits in the diff view, and let it see your open file, selection and problems.",
+  "version": "0.1.0",
+  "publisher": "siddarthar53",
+  "license": "ISC",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/siddarthar53/forge"
+  },
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "AI",
+    "Chat",
+    "Programming Languages"
+  ],
+  "keywords": [
+    "agent",
+    "ai",
+    "coding agent",
+    "openrouter",
+    "mcp"
+  ],
+  "main": "./extension.js",
+  "activationEvents": [],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "devpilot",
+          "title": "DevPilot",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "devpilot": [
+        {
+          "type": "webview",
+          "id": "devpilot.chat",
+          "name": "Chat"
+        }
+      ]
+    },
+    "commands": [
+      { "command": "devpilot.focus", "title": "Open Chat", "category": "DevPilot" },
+      { "command": "devpilot.newChat", "title": "New Chat", "category": "DevPilot", "icon": "$(add)" },
+      { "command": "devpilot.togglePlan", "title": "Toggle Plan Mode", "category": "DevPilot", "icon": "$(checklist)" },
+      { "command": "devpilot.stop", "title": "Stop", "category": "DevPilot", "icon": "$(debug-stop)" },
+      { "command": "devpilot.explainSelection", "title": "Explain Selection", "category": "DevPilot" },
+      { "command": "devpilot.fixProblems", "title": "Fix Problems in This File", "category": "DevPilot" },
+      { "command": "devpilot.reviewChanges", "title": "Review My Changes", "category": "DevPilot" },
+      { "command": "devpilot.acceptChange", "title": "Accept Change", "category": "DevPilot", "icon": "$(check)" },
+      { "command": "devpilot.rejectChange", "title": "Reject Change", "category": "DevPilot", "icon": "$(close)" },
+      { "command": "devpilot.setApiKey", "title": "Set OpenRouter API Key", "category": "DevPilot" },
+      { "command": "devpilot.restart", "title": "Restart Agent", "category": "DevPilot", "icon": "$(debug-restart)" },
+      { "command": "devpilot.showLog", "title": "Show Agent Output", "category": "DevPilot" }
+    ],
+    "menus": {
+      "view/title": [
+        { "command": "devpilot.newChat", "when": "view == devpilot.chat", "group": "navigation@1" },
+        { "command": "devpilot.togglePlan", "when": "view == devpilot.chat", "group": "navigation@2" },
+        { "command": "devpilot.restart", "when": "view == devpilot.chat", "group": "navigation@3" }
+      ],
+      "editor/title": [
+        { "command": "devpilot.acceptChange", "when": "resourceScheme == devpilot-diff", "group": "navigation@1" },
+        { "command": "devpilot.rejectChange", "when": "resourceScheme == devpilot-diff", "group": "navigation@2" }
+      ],
+      "editor/context": [
+        { "command": "devpilot.explainSelection", "when": "editorHasSelection", "group": "devpilot@1" },
+        { "command": "devpilot.fixProblems", "when": "editorTextFocus", "group": "devpilot@2" }
+      ],
+      "commandPalette": [
+        { "command": "devpilot.acceptChange", "when": "resourceScheme == devpilot-diff" },
+        { "command": "devpilot.rejectChange", "when": "resourceScheme == devpilot-diff" }
+      ]
+    },
+    "keybindings": [
+      { "command": "devpilot.focus", "key": "ctrl+alt+d", "mac": "cmd+alt+d" }
+    ],
+    "configuration": {
+      "title": "DevPilot",
+      "properties": {
+        "devpilot.model": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "OpenRouter model id, e.g. `anthropic/claude-sonnet-4.5`. Must support tool calling. Empty: use `OPENROUTER_MODEL` from DevPilot's `.env` or your environment."
+        },
+        "devpilot.cliPath": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Path to DevPilot's `index.js`. Empty: use the copy bundled with the extension, or the repository this extension lives in."
+        },
+        "devpilot.nodePath": {
+          "type": "string",
+          "default": "node",
+          "markdownDescription": "Node.js 22 or newer, used to run DevPilot."
+        },
+        "devpilot.env": {
+          "type": "object",
+          "default": {},
+          "additionalProperties": { "type": "string" },
+          "markdownDescription": "Extra environment variables for DevPilot, e.g. `{ \"DEVPILOT_SANDBOX\": \"docker\" }`."
+        },
+        "devpilot.includeEditorContext": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Send the open file, selection and problems with each message."
+        },
+        "devpilot.openDiffs": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Open the diff view when DevPilot proposes a file change."
+        },
+        "devpilot.saveBeforeSend": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Save unsaved files before sending a message, so DevPilot works on what you see."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "bundle-agent": "node scripts/bundle-agent.mjs",
+    "check": "tsc -p jsconfig.json",
+    "test": "node --test \"test/*.test.js\"",
+    "package": "npm run bundle-agent && vsce package --no-dependencies"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/vscode": "1.90.0",
+    "@vscode/vsce": "^3.0.0",
+    "typescript": "^5.6.0"
+  }
+}

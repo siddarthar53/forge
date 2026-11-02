@@ -1,0 +1,6 @@
+test/**
+scripts/**
+jsconfig.json
+node_modules/**
+**/*.vsix
+agent/package-lock.json

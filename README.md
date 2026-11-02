@@ -1,8 +1,8 @@
 # DevPilot
 
 A coding agent for the terminal: an LLM in a loop with tools, pointed at a
-codebase. This branch adds **sub-agents** on top of the
-Tier 3 MCP branch, following the build plan in
+codebase. This branch adds a **VS Code extension** on top of
+the Tier 3 sub-agents branch, following the build plan in
 `Coding Agent Feature Map Claude Code, Codex, GitHub Copilot.md`.
 
 | Branch | Built on | Adds |
@@ -10,7 +10,8 @@ Tier 3 MCP branch, following the build plan in
 | `tier-1` | | the minimum viable agent |
 | `tier-2` | `tier-1` | plan mode, context management, resume, git, sandbox, slash commands |
 | `tier-3-mcp` | `tier-2` | MCP client |
-| `tier-3-subagents` | `tier-3-mcp` | sub-agents and parallel tool calls (this branch) |
+| `tier-3-subagents` | `tier-3-mcp` | sub-agents and parallel tool calls |
+| `tier-3-vscode` | `tier-3-subagents` | VS Code extension and `--rpc` mode (this branch) |
 
 ## Run it
 
@@ -29,6 +30,7 @@ node "path/to/Coding Agent/index.js"
 
 devpilot --continue           # pick up the most recent conversation here
 devpilot --resume             # choose a saved conversation from a list
+devpilot --rpc                # JSON-lines mode, used by the VS Code extension
 ```
 
 `.env` (in this folder) needs:
@@ -92,8 +94,10 @@ it quits. `exit` also quits.
 
 | File | What it does |
 | --- | --- |
-| `index.js` | Flags (`--continue`, `--resume`), `.env` config, the API client. |
-| `src/chat.js` | The REPL: messages vs slash commands, Ctrl+C, one `app` object shared with the commands. |
+| `index.js` | Flags (`--continue`, `--resume`, `--rpc`), `.env` config, the API client. |
+| `src/app.js` | The app without a UI: startup (settings, MCP, agents), turns, sessions, commands. |
+| `src/chat.js` | The terminal front end: readline prompt, Ctrl+C, status line. |
+| `src/rpc.js` | The editor front end: JSON lines over stdin/stdout (`--rpc`). |
 | `src/agent.js` | **The agent loop.** Streaming, tool calls (in parallel when safe), usage, auto-compaction, loop detection, reporters. |
 | `src/commands.js` | Every slash command. |
 | `src/tools/index.js` | Toolsets (which tools an agent sees), JSON Schema validation, the plan-mode gate, result size cap. |
@@ -119,6 +123,7 @@ it quits. `exit` also quits.
 | `src/prompt.js` | The system prompt (stable for caching) and the plan-mode reminder. |
 | `src/ui.js` | Colors, diffs, number formatting, the `terminal` output object. |
 | `test/` | `node --test` suites; `agent.test.js` replays scripted model streams. |
+| `vscode-extension/` | The VS Code extension (its own README, package and tests). |
 
 ## What happens in one turn
 
@@ -322,8 +327,53 @@ Concepts, and where they live:
     result, notice) instead of printing, so the same loop drives the
     terminal, a sub-agent's one-line summaries, or an editor.
 
+## Tier 3: VS Code extension
+
+`vscode-extension/` puts DevPilot in a VS Code side panel: streaming chat,
+expandable tool calls and sub-agent progress, the checklist, proposed
+changes in VS Code's diff view (accept or reject from the diff editor's
+title bar), and the open file, selection and problems sent with each
+message. See `vscode-extension/README.md` for setup.
+
+```bash
+cd vscode-extension
+npm install
+npm run package    # -> devpilot-0.1.0.vsix with DevPilot bundled inside
+```
+
+Then *Extensions* → `…` → *Install from VSIX…*, run *DevPilot: Set
+OpenRouter API Key*, and set `devpilot.model`.
+
+The extension does not reimplement the agent. It runs `devpilot --rpc`
+and talks to it in JSON lines, the way the Codex extension talks to its app
+server:
+
+```
+editor  → {"type":"prompt","text":"fix the typo","context":{"activeFile":{...},"selection":{...}}}
+DevPilot→ {"type":"tool_call","name":"edit_file",...}
+DevPilot→ {"type":"approval_request","id":3,"title":"Edit app.js","diff":{"oldText":...,"newText":...}}
+editor  → {"type":"approval","id":3,"answer":"y"}
+DevPilot→ {"type":"text","delta":"Fixed."} ... {"type":"turn_end","status":"done"}
+```
+
+Concepts, and where they live:
+
+33. **One core, two front ends** (`app.js`). The terminal and the editor give
+    the app the same three things: `ask`, `approve` and a reporter. Nothing
+    in the agent loop knows which one it is talking to.
+34. **A protocol instead of a library** (`rpc.js`). stdout carries only JSON;
+    `console.log` output is captured as `log` events so nothing corrupts the
+    stream. Approvals and questions are request/response pairs with ids,
+    cancelled with `request_cancelled` when you press Stop.
+35. **Editor context as data.** The extension sends structure (path,
+    selection, diagnostics); DevPilot formats it into an `<editor-context>`
+    block, so the model sees the same thing from any editor.
+36. **Native diff review** (`vscode-extension/extension.js`). The approval's
+    old and new text are served by a virtual document provider and shown
+    with `vscode.diff`; the diff tab closes when you answer.
+
 ## Not in Tier 3 yet
 
-Next on its own branch: a VS Code extension. Still open:
+Still open:
 hooks, skills, headless mode and a GitHub Action, embedding search,
 background mode. And Tier 4: an evaluation benchmark to measure all of this.

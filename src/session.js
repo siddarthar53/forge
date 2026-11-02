@@ -217,7 +217,7 @@ export function listSessions(cwd, limit = 20) {
         messageCount: messages.length,
         title: firstUser
           ? firstUser.content
-              .replace(/<system-reminder>[\s\S]*?<\/system-reminder>/g, "")
+              .replace(/<(system-reminder|editor-context)>[\s\S]*?<\/\1>/g, "")
               .replace(/\s+/g, " ")
               .trim()
               .slice(0, 70)

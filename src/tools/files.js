@@ -220,6 +220,8 @@ async function applyChange({ absolute, oldText, newText, ctx }) {
       title: `${oldText === "" ? "Create" : "Edit"} ${shownPath}`,
       preview: renderDiff(shownPath, oldText, newText),
       alwaysLabel: "always allow file edits this session",
+      // Raw texts for front ends that show their own diff view (VS Code).
+      diff: { path: shownPath, absolute, oldText, newText },
     },
     ctx.signal
   );
