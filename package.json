@@ -1,6 +1,6 @@
 {
   "name": "coding-agent",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "description": "this is a coding agent which i am trying to build so i learn agentic AI",
   "license": "ISC",
   "author": "sid",
@@ -8,7 +8,7 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "test": "node --test"
+    "test": "node --test \"test/*.test.js\""
   },
   "dependencies": {
     "diff": "^9.0.0",

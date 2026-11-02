@@ -1,9 +1,15 @@
 # DevPilot
 
 A coding agent for the terminal: an LLM in a loop with tools, pointed at a
-codebase. This branch is **Tier 2** of the build plan in
-`Coding Agent Feature Map Claude Code, Codex, GitHub Copilot.md`. Tier 1 (the
-minimum viable agent) lives on the `tier-1` branch, unchanged.
+codebase. This branch adds the first **Tier 3** feature,
+**MCP**, on top of Tier 2, following the build plan in
+`Coding Agent Feature Map Claude Code, Codex, GitHub Copilot.md`.
+
+| Branch | Built on | Adds |
+| --- | --- | --- |
+| `tier-1` | | the minimum viable agent |
+| `tier-2` | `tier-1` | plan mode, context management, resume, git, sandbox, slash commands |
+| `tier-3-mcp` | `tier-2` | MCP client (this branch) |
 
 ## Run it
 
@@ -75,6 +81,7 @@ it quits. `exit` also quits.
 | `/context` | How full the context window is. |
 | `/cost` | Tokens (and how many came from the cache) and dollars for this conversation. |
 | `/model [id]` | Show or switch the model. |
+| `/mcp` | MCP servers: status, tools, errors. |
 | `/clear` | Start a fresh conversation (the old one stays saved). |
 | `/sessions`, `/resume [n]` | List or continue saved conversations. |
 | `/exit` | Quit. |
@@ -102,6 +109,9 @@ it quits. `exit` also quits.
 | `src/checkpoints.js` | File snapshots per turn, for `/undo`. |
 | `src/git.js` | Work branches, commit messages, commits. |
 | `src/testloop.js` | The test-fix loop behind `/test`. |
+| `src/mcp/client.js` | MCP over JSON-RPC: stdio and Streamable HTTP transports, handshake, cancellation. |
+| `src/mcp/config.js` | `.mcp.json` / `~/.devpilot/mcp.json`, `${VAR}` expansion, trusting project servers. |
+| `src/mcp/index.js` | Connects servers at startup and turns their tools into DevPilot tools. |
 | `src/permissions.js` | The y / n / always prompt. |
 | `src/prompt.js` | The system prompt (stable for caching) and the plan-mode reminder. |
 | `src/ui.js` | Colors, diffs, number formatting, the `terminal` output object. |
@@ -187,8 +197,68 @@ or it hits DEVPILOT_MAX_STEPS
     turn: the result gets a nudge to change approach.
 22. **`.gitignore` support** in `list_files` and `grep` via `git check-ignore`.
 
-## Not in Tier 2 (that's Tier 3)
+## Tier 3: MCP
 
-MCP client, sub-agents, hooks, skills, headless mode and a GitHub Action,
-embedding search, background mode, a web UI. And Tier 4: an evaluation
-benchmark to measure all of this.
+MCP (Model Context Protocol) lets DevPilot use tools from any MCP server:
+GitHub, Postgres, Sentry, a browser, your own. Configure servers in
+`<project>/.mcp.json` (shared with the team) or `~/.devpilot/mcp.json`
+(just you). It is the same format Claude Code uses:
+
+```json
+{
+  "mcpServers": {
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": { "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}" },
+      "tools": ["get_*", "search_*", "list_*"]
+    },
+    "docs": {
+      "url": "https://example.com/mcp",
+      "headers": { "Authorization": "Bearer ${DOCS_TOKEN}" },
+      "timeout": 60
+    }
+  }
+}
+```
+
+- `command` + `args` + `env`: a local server DevPilot starts (stdio).
+  `url` + `headers`: a remote server (Streamable HTTP).
+- `${VAR}` is read from your environment, so tokens stay out of the file.
+- `tools` is an allow-list (`*` matches a prefix); `disabled: true` skips a server.
+- A project `.mcp.json` can start any program, so DevPilot asks before
+  trusting each server, and asks again if its command or URL changes
+  (remembered in `~/.devpilot/mcp-trust.json`).
+- Every MCP tool call asks permission. Skip the prompt for specific tools
+  in `.devpilot/settings.json`: `"allow": ["mcp__github__get_*"]`, or
+  block them with `"deny"`.
+- In plan mode only tools the server marks `readOnlyHint` are available.
+- If a server offers resources, `mcp_list_resources` and `mcp_read_resource`
+  let the model read them.
+
+Concepts, and where they live:
+
+23. **JSON-RPC by hand** (`mcp/client.js`). Requests have an `id` and get a
+    response; notifications don't. A pending-request map matches replies to
+    callers; timeouts and Ctrl+C send `notifications/cancelled`.
+24. **Two transports.** stdio: newline-delimited JSON over a child process's
+    pipes, stderr kept for error messages. Streamable HTTP: one POST per
+    message, the reply is JSON or a short event stream, plus the
+    `Mcp-Session-Id` header.
+25. **Tools are data.** Each server tool becomes a normal DevPilot tool named
+    `mcp__<server>__<tool>` with the server's own description and JSON
+    Schema; the agent loop does not know the difference.
+26. **Stable tool list.** Servers connect before the first model call, so
+    the tools stay fixed and the prompt cache keeps working. A server that
+    announces new tools is noted in `/mcp`; restart to pick them up.
+27. **Trust boundaries.** Untrusted config is not executed silently, MCP
+    output is treated as data, and secrets come from the environment.
+
+Not done (yet): OAuth login for remote servers (use a token in `headers`),
+the old SSE transport, MCP prompts as slash commands, and sampling/roots.
+
+## Not in Tier 3 yet
+
+Next on their own branches: sub-agents and a VS Code extension. Still open:
+hooks, skills, headless mode and a GitHub Action, embedding search,
+background mode. And Tier 4: an evaluation benchmark to measure all of this.

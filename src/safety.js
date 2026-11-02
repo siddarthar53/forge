@@ -62,6 +62,20 @@ function startsWithRule(segment, rule) {
   return segment === rule || segment.startsWith(`${rule} `);
 }
 
+// Rules for non-shell tools, e.g. MCP tools: "mcp__github__get_issue" or
+// "mcp__github__*" in the allow or deny list of .devpilot/settings.json.
+function matchesToolRule(name, rule) {
+  return rule.endsWith("*") ? rule.length > 1 && name.startsWith(rule.slice(0, -1)) : name === rule;
+}
+
+export function checkToolRule(name, settings = { allow: [], deny: [] }) {
+  const denied = settings.deny.find((rule) => matchesToolRule(name, rule));
+  if (denied) return { verdict: "deny", reason: `"${denied}" is on the deny list in .devpilot/settings.json` };
+  const allowed = settings.allow.find((rule) => matchesToolRule(name, rule));
+  if (allowed) return { verdict: "allow", reason: `matches allow rule "${allowed}"` };
+  return { verdict: "ask" };
+}
+
 export function checkCommand(command, settings = { allow: [], deny: [] }) {
   for (const { pattern, reason } of BLOCKED) {
     if (pattern.test(command)) return { verdict: "deny", reason };

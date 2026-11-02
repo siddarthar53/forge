@@ -31,7 +31,7 @@ function loadProjectInstructions(cwd) {
 // The system prompt is built once per session and then never changes, so the
 // provider can cache it (caching.js). Anything that changes during a session
 // (plan mode, todos) reaches the model through messages instead.
-export function buildSystemPrompt({ cwd, sandbox = null }) {
+export function buildSystemPrompt({ cwd, sandbox = null, extraSections = [] }) {
   const branch = gitBranch(cwd);
   const instructions = loadProjectInstructions(cwd);
 
@@ -102,6 +102,7 @@ edit them, and run shell commands.
     );
   }
 
+  sections.push(...extraSections.filter(Boolean));
   return sections.join("\n\n");
 }
 

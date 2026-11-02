@@ -7,10 +7,20 @@ import { todoWrite } from "./todo.js";
 // `parameters` is a JSON Schema; the model reads it to know what to send.
 //
 // The list never changes during a session (not even in plan mode), because
-// the tool definitions are part of the cached prompt prefix.
-export const tools = [readFile, listFiles, grep, writeFile, editFile, runShell, todoWrite, exitPlanMode];
+// the tool definitions are part of the cached prompt prefix. MCP tools are
+// added once at startup, before the first model call (registerTools).
+export const builtinTools = [readFile, listFiles, grep, writeFile, editFile, runShell, todoWrite, exitPlanMode];
+export const tools = [...builtinTools];
 
-const toolsByName = new Map(tools.map((tool) => [tool.name, tool]));
+let toolsByName = new Map(tools.map((tool) => [tool.name, tool]));
+
+export function registerTools(extra) {
+  for (const tool of extra) {
+    if (toolsByName.has(tool.name)) throw new Error(`two tools are named "${tool.name}"`);
+    tools.push(tool);
+  }
+  toolsByName = new Map(tools.map((tool) => [tool.name, tool]));
+}
 
 // Last line of defense for the context window: no single tool result may be
 // larger than this, whatever the tool's own limits are.
@@ -98,8 +108,12 @@ export async function executeToolCall(call, ctx) {
     return "Error: the tool arguments were not valid JSON. Send them again as a JSON object.";
   }
 
-  const problem = validateArgs(tool.parameters, args);
-  if (problem) return `Error: ${problem}.`;
+  if (tool.validate !== false) {
+    const problem = validateArgs(tool.parameters, args);
+    if (problem) return `Error: ${problem}.`;
+  } else if (typeof args !== "object" || args === null || Array.isArray(args)) {
+    return "Error: arguments must be a JSON object.";
+  }
 
   // Plan mode: only tools that change nothing in the workspace may run.
   if (ctx.state?.mode === "plan" && !tool.readOnly) {

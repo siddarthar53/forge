@@ -9,6 +9,7 @@ import {
   isGitRepo,
   undoCommitPrep,
 } from "./git.js";
+import { projectConfigFile, userConfigFile } from "./mcp/config.js";
 import { listSessions } from "./session.js";
 import { detectTestCommand, runTestFixLoop } from "./testloop.js";
 import { renderTodos } from "./tools/todo.js";
@@ -161,6 +162,40 @@ const COMMANDS = [
         console.log(`About ${formatTokens(tokens)} tokens (context window unknown; set DEVPILOT_CONTEXT_WINDOW).`);
       }
       console.log(color.dim(`System prompt ~${formatTokens(system)} · tools ~${formatTokens(toolDefinitionTokens())} · ${app.session.messages.length - 1} messages`));
+    },
+  },
+
+  // ------------------------------------------------------------- MCP
+  {
+    name: "mcp",
+    description: "MCP servers: status and tools",
+    run(app) {
+      const { servers, skipped } = app.mcp;
+      if (servers.length === 0 && skipped.length === 0) {
+        console.log("No MCP servers configured.");
+        console.log(color.dim(`Add them to ${projectConfigFile(app.cwd)} or ${userConfigFile()} (see README).`));
+        return;
+      }
+      for (const s of servers) {
+        const where = s.transport === "stdio" ? [s.command, ...s.args].join(" ") : s.url;
+        const mark = s.status === "connected" ? color.green("●") : color.red("●");
+        const info = s.client.serverInfo ? ` ${s.client.serverInfo.name ?? ""} ${s.client.serverInfo.version ?? ""}`.trimEnd() : "";
+        console.log(`${mark} ${color.bold(s.name)} ${color.dim(`(${s.scope}, ${s.transport})${info}`)}`);
+        console.log(color.dim(`    ${truncate(where, 100)}`));
+        if (s.status !== "connected") {
+          console.log(color.red(`    ${s.error}`));
+          continue;
+        }
+        if (s.client.closedReason && s.client.closedReason !== "closed by DevPilot") {
+          console.log(color.red(`    disconnected: ${s.client.closedReason}`));
+        }
+        const flags = [s.tools.some((t) => t.readOnly) && "read-only tools usable in plan mode", s.client.capabilities.resources && "has resources"].filter(Boolean);
+        if (flags.length) console.log(color.dim(`    ${flags.join(" · ")}`));
+        for (const t of s.tools) console.log(`    ${t.readOnly ? color.dim("r") : " "} ${t.mcp.tool}  ${color.dim(truncate(t.description.replace(/^\[MCP server "[^"]+"\] /, ""), 70))}`);
+        if (s.hiddenTools) console.log(color.dim(`    (${s.hiddenTools} more hidden by the "tools" allow-list)`));
+        if (s.client.toolsChanged) console.log(color.yellow("    The server's tool list changed; restart DevPilot to pick it up."));
+      }
+      for (const s of skipped) console.log(`${color.dim("○")} ${color.bold(s.name)} ${color.dim(`skipped: ${s.reason}`)}`);
     },
   },
 

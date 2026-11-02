@@ -18,10 +18,14 @@ export function estimateTokens(value) {
 }
 
 // Tool definitions are sent with every request but are not in the history.
-let toolTokens = null;
+// Cached per tool count: the list only grows once, when MCP tools are added.
+let toolTokens = { count: -1, tokens: 0 };
 export function toolDefinitionTokens() {
-  toolTokens ??= estimateTokens(toolDefinitions());
-  return toolTokens;
+  const definitions = toolDefinitions();
+  if (toolTokens.count !== definitions.length) {
+    toolTokens = { count: definitions.length, tokens: estimateTokens(definitions) };
+  }
+  return toolTokens.tokens;
 }
 
 export function contextStatus(session, state) {

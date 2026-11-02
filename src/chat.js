@@ -7,10 +7,12 @@ import { createCheckpoints } from "./checkpoints.js";
 import { isCommand, runCommand } from "./commands.js";
 import { contextStatus, fetchModelInfo } from "./context.js";
 import { ensureWorkBranch } from "./git.js";
+import { connectMcpServers, printMcpSummary } from "./mcp/index.js";
 import { createPermissions } from "./permissions.js";
 import { PLAN_MODE_REMINDER, buildSystemPrompt } from "./prompt.js";
 import { createSession, listSessions } from "./session.js";
 import { loadSettings } from "./settings.js";
+import { registerTools } from "./tools/index.js";
 import { prepareSandbox } from "./tools/shell.js";
 import { renderTodos } from "./tools/todo.js";
 import { color, formatCost, formatTokens, truncate } from "./ui.js";
@@ -58,7 +60,12 @@ export async function startChat({ client, config }) {
     modelInfo: await fetchModelInfo({ ...config, contextWindowOverride: config.contextWindow }),
   };
 
-  const systemPrompt = buildSystemPrompt({ cwd, sandbox: config.sandbox });
+  // MCP servers start before the first model call: their tools become part
+  // of the (fixed) tool list and their instructions part of the system prompt.
+  const mcp = await connectMcpServers({ cwd, ask });
+  registerTools(mcp.tools);
+
+  const systemPrompt = buildSystemPrompt({ cwd, sandbox: config.sandbox, extraSections: [mcp.promptSection()] });
   const checkpoints = createCheckpoints();
 
   // Files the model has read, mapped to their modified-time at that moment.
@@ -169,6 +176,7 @@ export async function startChat({ client, config }) {
     readFiles,
     ask,
     approve,
+    mcp,
     session: null,
     withTurn,
     runTurn,
@@ -199,7 +207,7 @@ export async function startChat({ client, config }) {
   app.newSession(await pickStartupSession(cwd, config.resume, ask));
 
   const window = state.modelInfo.contextLength;
-  console.log(color.bold("\nDevPilot") + color.dim(" · coding agent · tier 2"));
+  console.log(color.bold("\nDevPilot") + color.dim(" · coding agent · tier 3"));
   console.log(color.dim(`Model:     ${state.model}${window ? ` (${formatTokens(window)} context)` : ""}`));
   console.log(color.dim(`Workspace: ${cwd}`));
   console.log(color.dim(`Log:       ${app.session.logFile}`));
@@ -207,6 +215,7 @@ export async function startChat({ client, config }) {
     console.log(color.dim(`Sandbox:   docker (${config.sandbox.image}, network ${config.sandbox.network ? "on" : "off"})`));
   }
   if (settings.sources.length) console.log(color.dim(`Settings:  ${settings.sources.join(", ")}`));
+  printMcpSummary(mcp);
   if (config.resume && app.session.messages.length > 1) {
     console.log(color.green(`Resumed ${app.session.messages.length - 1} messages.`));
     app.printRecap();
@@ -237,6 +246,7 @@ export async function startChat({ client, config }) {
   }
 
   rl.close();
+  await mcp.close();
   app.session.logEvent("session_end");
   console.log(color.dim("Goodbye!"));
 }
