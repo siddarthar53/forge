@@ -1,15 +1,16 @@
 # DevPilot
 
 A coding agent for the terminal: an LLM in a loop with tools, pointed at a
-codebase. This branch adds the first **Tier 3** feature,
-**MCP**, on top of Tier 2, following the build plan in
+codebase. This branch adds **sub-agents** on top of the
+Tier 3 MCP branch, following the build plan in
 `Coding Agent Feature Map Claude Code, Codex, GitHub Copilot.md`.
 
 | Branch | Built on | Adds |
 | --- | --- | --- |
 | `tier-1` | | the minimum viable agent |
 | `tier-2` | `tier-1` | plan mode, context management, resume, git, sandbox, slash commands |
-| `tier-3-mcp` | `tier-2` | MCP client (this branch) |
+| `tier-3-mcp` | `tier-2` | MCP client |
+| `tier-3-subagents` | `tier-3-mcp` | sub-agents and parallel tool calls (this branch) |
 
 ## Run it
 
@@ -82,6 +83,7 @@ it quits. `exit` also quits.
 | `/cost` | Tokens (and how many came from the cache) and dollars for this conversation. |
 | `/model [id]` | Show or switch the model. |
 | `/mcp` | MCP servers: status, tools, errors. |
+| `/agents` | Sub-agents the model can start, with their tools. |
 | `/clear` | Start a fresh conversation (the old one stays saved). |
 | `/sessions`, `/resume [n]` | List or continue saved conversations. |
 | `/exit` | Quit. |
@@ -92,9 +94,9 @@ it quits. `exit` also quits.
 | --- | --- |
 | `index.js` | Flags (`--continue`, `--resume`), `.env` config, the API client. |
 | `src/chat.js` | The REPL: messages vs slash commands, Ctrl+C, one `app` object shared with the commands. |
-| `src/agent.js` | **The agent loop.** Streaming, tool calls, usage, auto-compaction, loop detection. |
+| `src/agent.js` | **The agent loop.** Streaming, tool calls (in parallel when safe), usage, auto-compaction, loop detection, reporters. |
 | `src/commands.js` | Every slash command. |
-| `src/tools/index.js` | Tool registry, JSON Schema validation, the plan-mode gate, result size cap. |
+| `src/tools/index.js` | Toolsets (which tools an agent sees), JSON Schema validation, the plan-mode gate, result size cap. |
 | `src/tools/files.js` | `read_file`, `list_files`, `grep` (all `.gitignore`-aware), `write_file`, `edit_file`. |
 | `src/tools/shell.js` | `run_shell`: host shell or Docker sandbox, deny list, timeout, truncation. |
 | `src/tools/todo.js` | `todo_write`: the agent's checklist. |
@@ -112,7 +114,8 @@ it quits. `exit` also quits.
 | `src/mcp/client.js` | MCP over JSON-RPC: stdio and Streamable HTTP transports, handshake, cancellation. |
 | `src/mcp/config.js` | `.mcp.json` / `~/.devpilot/mcp.json`, `${VAR}` expansion, trusting project servers. |
 | `src/mcp/index.js` | Connects servers at startup and turns their tools into DevPilot tools. |
-| `src/permissions.js` | The y / n / always prompt. |
+| `src/subagents.js` | Built-in and custom sub-agents, and the `task` tool that runs them. |
+| `src/permissions.js` | The y / n / always prompt (queued, so parallel agents ask one at a time). |
 | `src/prompt.js` | The system prompt (stable for caching) and the plan-mode reminder. |
 | `src/ui.js` | Colors, diffs, number formatting, the `terminal` output object. |
 | `test/` | `node --test` suites; `agent.test.js` replays scripted model streams. |
@@ -257,8 +260,70 @@ Concepts, and where they live:
 Not done (yet): OAuth login for remote servers (use a token in `headers`),
 the old SSE transport, MCP prompts as slash commands, and sampling/roots.
 
+## Tier 3: sub-agents
+
+The main agent can hand a self-contained job to a **sub-agent** with its
+own fresh context window and a restricted set of tools, using the `task`
+tool. Only the sub-agent's final report comes back, so a search through 30
+files costs the main conversation a few hundred tokens instead of 30 files.
+
+```
+⏺ task {"agent":"explorer","description":"Find auth", ...}
+  ⧉ explorer#1 Find auth
+⏺ task {"agent":"explorer","description":"Find db", ...}
+  ⧉ explorer#2 Find db
+  ↳ explorer#1 grep {"pattern":"login"}
+  ↳ explorer#2 grep {"pattern":"db"}
+  ✓ explorer#2 done · 2 steps · 2.0k tokens
+  ✓ explorer#1 done · 2 steps · 2.0k tokens
+```
+
+| Agent | Tools | Use |
+| --- | --- | --- |
+| `explorer` | read, list, grep, read-only MCP tools | Broad searches and "how does X work" questions. Read-only, so several run at once, also in plan mode. |
+| `reviewer` | read tools + `run_shell` | Reviews the git diff for bugs and edge cases, can run tests, never edits. |
+| `general` | everything except `task`, todos and plan tools | A self-contained chunk of work; edits still ask you. |
+
+Add your own as Markdown files in `<project>/.devpilot/agents/` (or
+`~/.devpilot/agents/` for every project). A project agent with a built-in's
+name replaces it.
+
+```markdown
+---
+name: test-writer
+description: Writes unit tests for one module, following the project's style.
+tools: read_file, list_files, grep, write_file, edit_file, run_shell
+model: anthropic/claude-haiku-4.5
+---
+You write focused unit tests. Read the module and its existing tests first,
+match their style, and run the tests before you report back.
+```
+
+`tools` takes names or prefixes (`mcp__github__*`), and `mcp:read-only` for
+every read-only MCP tool. `model` is optional (default: the main model).
+`DEVPILOT_SUBAGENT_MAX_STEPS` (default 30) caps each run.
+
+Concepts, and where they live:
+
+28. **Context isolation** (`subagents.js`). A sub-agent is just `runAgent`
+    again with a new session, a new system prompt and its own `readFiles`
+    map. Its log goes to `.devpilot/subagents/`; the main log records which file.
+29. **Toolsets** (`tools/index.js`). The model only sees the tools in its
+    toolset, and calls to anything else are refused, so "read-only" is
+    enforced, not just requested. Sub-agents never get `task` (no nesting).
+30. **Parallel tool calls** (`agent.js` → `groupForParallel`). Neighbouring
+    calls that are read-only and never prompt (reads, greps, read-only
+    agents) run with `Promise.all`; results go back in the original order.
+31. **Shared safety.** Sub-agents use your permission prompts (labelled
+    `[explorer#2]` and queued one at a time), your allow/deny rules, the
+    sandbox, and the same `/undo` checkpoint as the turn that started them.
+    Their tokens and cost are added to `/cost`.
+32. **Reporters** (`agent.js`). The loop reports events (text, tool call,
+    result, notice) instead of printing, so the same loop drives the
+    terminal, a sub-agent's one-line summaries, or an editor.
+
 ## Not in Tier 3 yet
 
-Next on their own branches: sub-agents and a VS Code extension. Still open:
+Next on its own branch: a VS Code extension. Still open:
 hooks, skills, headless mode and a GitHub Action, embedding search,
 background mode. And Tier 4: an evaluation benchmark to measure all of this.

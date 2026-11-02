@@ -49,6 +49,7 @@ function loadConfig(args) {
     baseURL: env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1",
     model: env.OPENROUTER_MODEL,
     maxSteps: Number(env.DEVPILOT_MAX_STEPS ?? 25),
+    subagentMaxSteps: Number(env.DEVPILOT_SUBAGENT_MAX_STEPS ?? 30),
     // Context window in tokens. Normally read from OpenRouter's model list.
     contextWindow: Number(env.DEVPILOT_CONTEXT_WINDOW) || null,
     // Compact the conversation when the context is this full (0 to 1).

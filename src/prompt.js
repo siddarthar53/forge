@@ -31,10 +31,9 @@ function loadProjectInstructions(cwd) {
 // The system prompt is built once per session and then never changes, so the
 // provider can cache it (caching.js). Anything that changes during a session
 // (plan mode, todos) reaches the model through messages instead.
-export function buildSystemPrompt({ cwd, sandbox = null, extraSections = [] }) {
+// Shared by the main agent's and the sub-agents' prompts.
+export function environmentSection({ cwd, sandbox = null }) {
   const branch = gitBranch(cwd);
-  const instructions = loadProjectInstructions(cwd);
-
   const environment = [
     `Working directory: ${cwd}`,
     `Platform: ${os.platform()} (${os.release()})`,
@@ -49,7 +48,16 @@ export function buildSystemPrompt({ cwd, sandbox = null, extraSections = [] }) {
     `Git: ${branch ? `repository, branch "${branch}"` : "not a git repository"}`,
     `Today's date: ${new Date().toISOString().slice(0, 10)}`,
   ].join("\n");
+  return `# Environment\n${environment}`;
+}
 
+export function projectInstructionsSection(cwd) {
+  const instructions = loadProjectInstructions(cwd);
+  if (!instructions) return null;
+  return `# Project instructions (from ${INSTRUCTIONS_FILE})\nFollow these; they come from the user.\n\n${instructions}`;
+}
+
+export function buildSystemPrompt({ cwd, sandbox = null, extraSections = [] }) {
   const sections = [
     `You are DevPilot, a coding agent running in the user's terminal. You help with
 software tasks in the working directory by calling tools: read and search files,
@@ -77,6 +85,11 @@ edit them, and run shell commands.
 - The user can turn on plan mode. While it is on (each message reminds you),
   only read-only tools work: explore, then call exit_plan_mode with a concrete
   plan, and make no changes until the user approves it.
+- Delegate with the task tool to keep your context small: explorer sub-agents
+  for broad searches or questions that need many files (start several at once
+  for independent questions), the reviewer when the user asks for a review or
+  after a large change. Give each one a complete, standalone prompt. Don't
+  delegate a single read or grep.
 - When fixing failing tests, run them, read the failure, fix the cause, and
   rerun until they pass. Fix the code rather than weakening the tests, unless
   a test is clearly wrong.
@@ -92,17 +105,11 @@ edit them, and run shell commands.
 - Be concise. Before tool calls, a short sentence about what you're doing is enough.
 - When finished, summarize what you changed and how you verified it, in a few lines.
 - Ask a clarifying question when the request is ambiguous instead of guessing.`,
-    `# Environment\n${environment}`,
-  ];
+    environmentSection({ cwd, sandbox }),
+    projectInstructionsSection(cwd),
+    ...extraSections,
+  ].filter(Boolean);
 
-  if (instructions) {
-    sections.push(
-      `# Project instructions (from ${INSTRUCTIONS_FILE})\n` +
-        `Follow these; they come from the user.\n\n${instructions}`
-    );
-  }
-
-  sections.push(...extraSections.filter(Boolean));
   return sections.join("\n\n");
 }
 

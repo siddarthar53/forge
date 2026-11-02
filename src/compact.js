@@ -1,5 +1,5 @@
 import { withCacheBreakpoints } from "./caching.js";
-import { toolDefinitions } from "./tools/index.js";
+import { mainToolset } from "./tools/index.js";
 import { todosAsText } from "./tools/todo.js";
 
 // Compaction: when the conversation gets close to the model's context window,
@@ -26,7 +26,7 @@ Include:
 Be specific (paths, function names, exact error messages). Don't call tools.
 Reply with the summary only.`;
 
-export async function compactConversation({ client, session, state, signal, focus, continueTask }) {
+export async function compactConversation({ client, session, state, signal, focus, continueTask, toolset = mainToolset }) {
   const request = [
     ...session.messages,
     {
@@ -41,7 +41,7 @@ export async function compactConversation({ client, session, state, signal, focu
       messages: withCacheBreakpoints(request, state.model),
       // Same tools as the normal requests: it keeps the cached prefix valid,
       // and some providers reject histories with tool calls but no tools.
-      tools: toolDefinitions(),
+      tools: toolset.definitions(),
       tool_choice: "none",
       usage: { include: true },
     },

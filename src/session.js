@@ -20,12 +20,11 @@ export function sessionsDir(cwd) {
   return path.join(cwd, ".devpilot", "sessions");
 }
 
-export function createSession({ cwd, model, systemPrompt, resumeFile = null }) {
-  const dir = sessionsDir(cwd);
+export function createSession({ cwd, model, systemPrompt, resumeFile = null, dir = sessionsDir(cwd), name = null }) {
   mkdirSync(dir, { recursive: true });
 
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-  const logFile = resumeFile ?? path.join(dir, `${stamp}.jsonl`);
+  const logFile = resumeFile ?? path.join(dir, `${stamp}${name ? `-${name}` : ""}.jsonl`);
 
   function logEvent(type, data = {}) {
     const entry = { time: new Date().toISOString(), type, ...data };
@@ -73,6 +72,23 @@ export function createSession({ cwd, model, systemPrompt, resumeFile = null }) {
     }
   }
 
+  // Add a sub-agent's totals to this session's /cost (not to its context).
+  function addUsageTotals(totals) {
+    if (totals.calls === 0) return;
+    recordUsage(
+      {
+        calls: totals.calls,
+        prompt_tokens: totals.promptTokens,
+        completion_tokens: totals.completionTokens,
+        prompt_tokens_details: { cached_tokens: totals.cachedTokens },
+        cost: totals.cost,
+      },
+      null,
+      { updateContext: false }
+    );
+    if (totals.costIsEstimate) usage.costIsEstimate = true;
+  }
+
   function estimateContextTokens(toolTokens = 0) {
     if (knownLength > 0 && knownLength <= messages.length) {
       const added = messages.slice(knownLength);
@@ -115,6 +131,7 @@ export function createSession({ cwd, model, systemPrompt, resumeFile = null }) {
     replaceMessages,
     setTodos,
     recordUsage,
+    addUsageTotals,
     estimateContextTokens,
     logEvent,
   };

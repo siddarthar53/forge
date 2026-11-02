@@ -199,6 +199,28 @@ const COMMANDS = [
     },
   },
 
+  {
+    name: "agents",
+    description: "Sub-agents the model can start with the task tool",
+    run(app) {
+      for (const a of app.agents.agents) {
+        const names = new Set(a.toolList.map((t) => t.name));
+        const powers = [
+          (names.has("write_file") || names.has("edit_file")) && "edits files",
+          names.has("run_shell") && "runs commands",
+          a.toolList.some((t) => t.mcp && !t.readOnly) && "MCP actions",
+        ].filter(Boolean);
+        const tag = a.readOnly ? color.green("read-only") : color.yellow(powers.join(", "));
+        const model = a.model ? color.dim(` · model ${a.model}`) : "";
+        console.log(`${color.bold(a.name)} ${color.dim(`(${a.source === "built-in" ? "built-in" : displayPath(app.cwd, a.source)})`)} ${tag}${model}`);
+        console.log(`    ${truncate(a.description, 110)}`);
+        console.log(color.dim(`    tools: ${a.toolList.map((t) => t.name).join(", ") || "none available"}`));
+      }
+      for (const error of app.agents.errors) console.log(color.yellow(error));
+      console.log(color.dim("\nAdd your own as .devpilot/agents/<name>.md (see README)."));
+    },
+  },
+
   // --------------------------------------------------------- planning
   {
     name: "plan",

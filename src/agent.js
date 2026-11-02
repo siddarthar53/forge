@@ -1,10 +1,35 @@
 import { withCacheBreakpoints } from "./caching.js";
 import { compactConversation } from "./compact.js";
 import { contextStatus } from "./context.js";
-import { executeToolCall, toolDefinitions } from "./tools/index.js";
+import { mainToolset } from "./tools/index.js";
 import { color, formatTokens, terminal, truncate } from "./ui.js";
 
-// Stream one assistant reply. Text is printed as it arrives. Tool calls
+// ----------------------------------------------------------------- reporters
+//
+// The loop never prints directly. It tells a "reporter" what happened, and
+// the reporter decides how to show it. The main agent's reporter prints to
+// the terminal; a sub-agent's prints short labelled lines; the VS Code
+// extension's sends events to the editor.
+
+function describeCall(call) {
+  return `${color.cyan("⏺")} ${color.bold(call.function.name)} ${color.dim(truncate(call.function.arguments, 100))}`;
+}
+
+function describeResult(result) {
+  const lines = result.split("\n");
+  const extra = lines.length > 1 ? color.dim(` (+${lines.length - 1} lines)`) : "";
+  return `  ${color.dim("⎿")} ${color.dim(truncate(lines[0], 100))}${extra}`;
+}
+
+export const terminalReporter = {
+  text: (delta) => terminal.write(delta),
+  textEnd: () => terminal.write("\n"),
+  toolCall: (call) => terminal.log(describeCall(call)),
+  toolResult: (call, result) => terminal.log(describeResult(result)),
+  notice: (message) => terminal.log(message),
+};
+
+// Stream one assistant reply. Text is reported as it arrives. Tool calls
 // arrive in fragments, so we glue them back together by their `index`:
 //
 //   chunk 1: { index: 0, id: "call_1", function: { name: "read_file", arguments: "" } }
@@ -13,12 +38,12 @@ import { color, formatTokens, terminal, truncate } from "./ui.js";
 //
 // The last chunk carries `usage`: exact token counts (and, on OpenRouter,
 // the cost) of this call. That feeds the token counter and /cost.
-async function streamAssistantMessage({ client, model, messages, signal }) {
+async function streamAssistantMessage({ client, model, messages, signal, toolset, reporter }) {
   const stream = await client.chat.completions.create(
     {
       model,
       messages: withCacheBreakpoints(messages, model), // see caching.js
-      tools: toolDefinitions(),
+      tools: toolset.definitions(),
       stream: true,
       stream_options: { include_usage: true }, // send usage in the final chunk
       usage: { include: true }, // OpenRouter: include the cost in dollars
@@ -44,7 +69,7 @@ async function streamAssistantMessage({ client, model, messages, signal }) {
       const delta = choice.delta ?? {};
       if (delta.content) {
         content += delta.content;
-        terminal.write(delta.content);
+        reporter.text(delta.content);
       }
 
       for (const part of delta.tool_calls ?? []) {
@@ -63,25 +88,15 @@ async function streamAssistantMessage({ client, model, messages, signal }) {
     throw err;
   }
 
-  if (content) terminal.write("\n");
+  if (content) reporter.textEnd();
   if (finishReason === "length") {
-    terminal.log(color.yellow("[the reply hit the model's output limit and was cut off]"));
+    reporter.notice(color.yellow("[the reply hit the model's output limit and was cut off]"));
   }
 
   const message = { role: "assistant", content: content || null };
   const calls = toolCalls.filter(Boolean);
   if (calls.length > 0) message.tool_calls = calls;
   return { message, aborted: false, usage };
-}
-
-function describeCall(call) {
-  return `${color.cyan("⏺")} ${color.bold(call.function.name)} ${color.dim(truncate(call.function.arguments, 100))}`;
-}
-
-function describeResult(result) {
-  const lines = result.split("\n");
-  const extra = lines.length > 1 ? color.dim(` (+${lines.length - 1} lines)`) : "";
-  return `  ${color.dim("⎿")} ${color.dim(truncate(lines[0], 100))}${extra}`;
 }
 
 // Loop detection. A stuck model repeats itself: the same failing command,
@@ -103,6 +118,25 @@ function noticeRepeats(repeats, call, result) {
   );
 }
 
+// Parallel tool calls. Models often ask for several independent things at
+// once ("read these 4 files", "explore A and B"). Neighbouring calls that are
+// parallel-safe (read-only, never prompt) run together; anything else runs
+// alone, in order:
+//
+//   [read, read, grep, edit, read, task(explorer), task(explorer)]
+//    \______________/  \__/  \___________________________________/
+//       together      alone            together
+export function groupForParallel(calls, toolset) {
+  const groups = [];
+  for (const call of calls) {
+    const safe = toolset.isParallelSafe(call);
+    const last = groups.at(-1);
+    if (safe && last?.safe) last.calls.push(call);
+    else groups.push({ safe, calls: [call] });
+  }
+  return groups;
+}
+
 // The agent loop. One user message can take many model calls:
 //
 //   model -> "call read_file"  -> we run it -> send the result back
@@ -111,26 +145,38 @@ function noticeRepeats(repeats, call, result) {
 //
 // Before every call we check the context window and compact if it is
 // nearly full. maxSteps stops a model that never stops calling tools.
-export async function runAgent({ client, session, state, toolContext, maxSteps, compactAt, onCompact }) {
+export async function runAgent({
+  client,
+  session,
+  state,
+  toolContext,
+  maxSteps,
+  compactAt,
+  onCompact,
+  toolset = mainToolset,
+  reporter = terminalReporter,
+}) {
   const { signal } = toolContext;
   const repeats = new Map();
+  let steps = 0;
 
   for (let step = 1; step <= maxSteps; step++) {
-    const status = contextStatus(session, state);
+    steps = step;
+    const status = contextStatus(session, state, toolset);
     if (status.window && status.tokens >= status.window * compactAt) {
-      terminal.log(
+      reporter.notice(
         color.yellow(
           `[context ${status.percent}% full (${formatTokens(status.tokens)}/${formatTokens(status.window)}): compacting…]`
         )
       );
       try {
-        await compactConversation({ client, session, state, signal, continueTask: true });
+        await compactConversation({ client, session, state, signal, continueTask: true, toolset });
         onCompact?.();
-        const after = contextStatus(session, state);
-        terminal.log(color.dim(`[compacted to about ${formatTokens(after.tokens)} tokens]`));
+        const after = contextStatus(session, state, toolset);
+        reporter.notice(color.dim(`[compacted to about ${formatTokens(after.tokens)} tokens]`));
       } catch (err) {
-        if (signal.aborted) return { status: "interrupted" };
-        terminal.log(color.yellow(`[compaction failed: ${err.message}; continuing without it]`));
+        if (signal.aborted) return { status: "interrupted", steps };
+        reporter.notice(color.yellow(`[compaction failed: ${err.message}; continuing without it]`));
       }
     }
 
@@ -139,25 +185,35 @@ export async function runAgent({ client, session, state, toolContext, maxSteps, 
       model: state.model,
       messages: session.messages,
       signal,
+      toolset,
+      reporter,
     });
     session.addMessage(message);
     if (usage) session.recordUsage(usage, state.modelInfo?.pricing);
 
-    if (aborted) return { status: "interrupted" };
-    if (!message.tool_calls) return { status: "done" };
+    if (aborted) return { status: "interrupted", steps };
+    if (!message.tool_calls) return { status: "done", steps, text: message.content ?? "" };
 
     // Every tool call needs a matching tool result in the history, even if we
-    // were interrupted; otherwise the next API request is rejected.
-    for (const call of message.tool_calls) {
-      terminal.log(describeCall(call));
-      let result = signal.aborted ? "Cancelled by the user." : await executeToolCall(call, toolContext);
-      result = noticeRepeats(repeats, call, result);
-      terminal.log(describeResult(result));
-      session.addMessage({ role: "tool", tool_call_id: call.id, content: result });
+    // were interrupted; otherwise the next API request is rejected. Results
+    // are added in the order the model asked, whatever order they finish in.
+    for (const group of groupForParallel(message.tool_calls, toolset)) {
+      const run = async (call) => {
+        reporter.toolCall(call);
+        let result = signal.aborted ? "Cancelled by the user." : await toolset.execute(call, toolContext);
+        result = noticeRepeats(repeats, call, result);
+        reporter.toolResult(call, result);
+        return result;
+      };
+
+      const results = group.safe && group.calls.length > 1 ? await Promise.all(group.calls.map(run)) : [];
+      if (results.length === 0) for (const call of group.calls) results.push(await run(call));
+
+      group.calls.forEach((call, i) => session.addMessage({ role: "tool", tool_call_id: call.id, content: results[i] }));
     }
 
-    if (signal.aborted) return { status: "interrupted" };
+    if (signal.aborted) return { status: "interrupted", steps };
   }
 
-  return { status: "max_steps" };
+  return { status: "max_steps", steps };
 }

@@ -1,4 +1,4 @@
-import { toolDefinitions } from "./tools/index.js";
+import { mainToolset } from "./tools/index.js";
 
 // ----------------------------------------------------------- token counting
 //
@@ -19,17 +19,17 @@ export function estimateTokens(value) {
 
 // Tool definitions are sent with every request but are not in the history.
 // Cached per tool count: the list only grows once, when MCP tools are added.
-let toolTokens = { count: -1, tokens: 0 };
-export function toolDefinitionTokens() {
-  const definitions = toolDefinitions();
-  if (toolTokens.count !== definitions.length) {
-    toolTokens = { count: definitions.length, tokens: estimateTokens(definitions) };
-  }
-  return toolTokens.tokens;
+const toolTokenCache = new WeakMap(); // toolset -> { count, tokens }
+export function toolDefinitionTokens(toolset = mainToolset) {
+  const cached = toolTokenCache.get(toolset);
+  if (cached?.count === toolset.tools.length) return cached.tokens;
+  const tokens = estimateTokens(toolset.definitions());
+  toolTokenCache.set(toolset, { count: toolset.tools.length, tokens });
+  return tokens;
 }
 
-export function contextStatus(session, state) {
-  const tokens = session.estimateContextTokens(toolDefinitionTokens());
+export function contextStatus(session, state, toolset = mainToolset) {
+  const tokens = session.estimateContextTokens(toolDefinitionTokens(toolset));
   const window = state.modelInfo?.contextLength ?? null;
   return {
     tokens,
@@ -87,7 +87,7 @@ export function costOf(usage, pricing) {
 }
 
 export function addUsage(totals, usage, cost, estimated) {
-  totals.calls += 1;
+  totals.calls += usage.calls ?? 1; // `calls` is set when merging a sub-agent's totals
   totals.promptTokens += usage.prompt_tokens ?? 0;
   totals.completionTokens += usage.completion_tokens ?? 0;
   totals.cachedTokens += usage.prompt_tokens_details?.cached_tokens ?? 0;

@@ -71,6 +71,7 @@ export const readFile = {
     required: ["path"],
   },
   readOnly: true,
+  parallel: true,
 
   async run({ path: filePath, offset = 1, limit = MAX_LINES }, ctx) {
     const absolute = resolveInWorkspace(ctx.cwd, filePath);
@@ -119,6 +120,7 @@ export const listFiles = {
     required: [],
   },
   readOnly: true,
+  parallel: true,
 
   async run({ pattern = "**/*" }, ctx) {
     const files = await findFiles(ctx.cwd, pattern);
@@ -150,6 +152,7 @@ export const grep = {
     required: ["pattern"],
   },
   readOnly: true,
+  parallel: true,
 
   async run({ pattern, glob = "**/*", case_insensitive = false }, ctx) {
     const regex = new RegExp(pattern, case_insensitive ? "i" : "");

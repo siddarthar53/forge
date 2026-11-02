@@ -14,7 +14,16 @@ import { color } from "./ui.js";
 export function createPermissions({ ask }) {
   const alwaysAllowed = new Set();
 
-  return async function approve({ key, title, preview, alwaysLabel }, signal) {
+  // Sub-agents can run in parallel, and two of them may want permission at
+  // the same moment. Questions wait in line, so the user sees one at a time.
+  let queue = Promise.resolve();
+  return function approve(request, signal) {
+    const turn = queue.then(() => (signal?.aborted ? { allowed: false, message: "Cancelled by the user." } : prompt(request, signal)));
+    queue = turn.catch(() => {});
+    return turn;
+  };
+
+  async function prompt({ key, title, preview, alwaysLabel }, signal) {
     if (preview) console.log(`\n${preview}\n`);
 
     const canAlways = Boolean(key && alwaysLabel);
@@ -40,5 +49,5 @@ export function createPermissions({ ask }) {
       allowed: false,
       message: `The user declined this action and said: "${answer}"`,
     };
-  };
+  }
 }

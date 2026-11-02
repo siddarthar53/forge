@@ -11,6 +11,7 @@ import { connectMcpServers, printMcpSummary } from "./mcp/index.js";
 import { createPermissions } from "./permissions.js";
 import { PLAN_MODE_REMINDER, buildSystemPrompt } from "./prompt.js";
 import { createSession, listSessions } from "./session.js";
+import { createTaskTool, loadAgents } from "./subagents.js";
 import { loadSettings } from "./settings.js";
 import { registerTools } from "./tools/index.js";
 import { prepareSandbox } from "./tools/shell.js";
@@ -64,6 +65,11 @@ export async function startChat({ client, config }) {
   // of the (fixed) tool list and their instructions part of the system prompt.
   const mcp = await connectMcpServers({ cwd, ask });
   registerTools(mcp.tools);
+
+  // Sub-agents pick their tools from everything registered so far (built-in
+  // and MCP); then the task tool that starts them is added last.
+  const agents = loadAgents(cwd);
+  registerTools([createTaskTool(agents.agents)]);
 
   const systemPrompt = buildSystemPrompt({ cwd, sandbox: config.sandbox, extraSections: [mcp.promptSection()] });
   const checkpoints = createCheckpoints();
@@ -145,7 +151,19 @@ export async function startChat({ client, config }) {
           maxSteps: config.maxSteps,
           compactAt: config.compactAt,
           onCompact: app.historyWasReset,
-          toolContext: { cwd, signal, readFiles, approve, settings, state, session, sandbox: config.sandbox, beforeWrite },
+          toolContext: {
+            cwd,
+            signal,
+            readFiles,
+            approve,
+            settings,
+            state,
+            session,
+            sandbox: config.sandbox,
+            beforeWrite,
+            client, // sub-agents make their own model calls
+            config,
+          },
         }));
         if (status === "max_steps") {
           console.log(color.yellow(`[stopped after ${config.maxSteps} steps; send a message to let it continue]`));
@@ -177,6 +195,7 @@ export async function startChat({ client, config }) {
     ask,
     approve,
     mcp,
+    agents,
     session: null,
     withTurn,
     runTurn,
@@ -216,6 +235,9 @@ export async function startChat({ client, config }) {
   }
   if (settings.sources.length) console.log(color.dim(`Settings:  ${settings.sources.join(", ")}`));
   printMcpSummary(mcp);
+  const custom = agents.agents.filter((a) => a.source !== "built-in");
+  if (custom.length) console.log(color.dim(`Agents:    ${custom.map((a) => a.name).join(", ")} (custom)`));
+  for (const error of agents.errors) console.log(color.yellow(`Agents:    ${error}`));
   if (config.resume && app.session.messages.length > 1) {
     console.log(color.green(`Resumed ${app.session.messages.length - 1} messages.`));
     app.printRecap();

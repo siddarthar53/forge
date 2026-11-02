@@ -132,6 +132,7 @@ function resourceTools(manager) {
         required: [],
       },
       readOnly: true,
+      parallel: true,
       async run({ server }, ctx) {
         const servers = server ? [byName(server)] : withResources();
         const lines = [];
@@ -158,6 +159,7 @@ function resourceTools(manager) {
         required: ["server", "uri"],
       },
       readOnly: true,
+      parallel: true,
       async run({ server, uri }, ctx) {
         const result = await byName(server).client.readResource(uri, { signal: ctx.signal });
         const parts = (result.contents ?? []).map((c) =>
