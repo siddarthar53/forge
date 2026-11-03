@@ -4,8 +4,7 @@ I did not try to build a Claude Code clone in one go. I started from a feature
 map of three real coding agents (Claude Code, OpenAI Codex, GitHub Copilot),
 sorted their features into tiers, and built one tier at a time. **Each tier
 had to run and be demo-able before the next one started**, and each lives on
-its own branch. The code at the end of each tier is saved as a tag
-(`snapshot/tier-1` … `snapshot/tier-3-vscode`), so the growth stays visible:
+its own commit, so the code at each stage stays browsable (links below):
 
 ```mermaid
 flowchart LR
@@ -23,16 +22,16 @@ flowchart LR
     class t3a,t3b,t3c t3
 ```
 
-| Snapshot tag | Date | Built on | JS source lines | Tests |
+| Tier (final commit) | Date | Built on | JS source lines | Tests |
 | --- | --- | --- | --- | --- |
-| [`snapshot/tier-1`](https://github.com/siddarthar53/forge/tree/snapshot/tier-1) | 2026-10-30 | | 940 | 0 |
-| [`snapshot/tier-2`](https://github.com/siddarthar53/forge/tree/snapshot/tier-2) | 2026-10-31 | `tier-1` | 2,716 | 21 |
-| [`snapshot/tier-3-mcp`](https://github.com/siddarthar53/forge/tree/snapshot/tier-3-mcp) | 2026-11-02 | `tier-2` | 3,580 | 27 |
-| [`snapshot/tier-3-subagents`](https://github.com/siddarthar53/forge/tree/snapshot/tier-3-subagents) | 2026-11-02 | `tier-3-mcp` | 4,083 | 34 |
-| [`snapshot/tier-3-vscode`](https://github.com/siddarthar53/forge/tree/snapshot/tier-3-vscode) | 2026-11-02 | `tier-3-subagents` | 5,791 | 41 |
-| `main` (and every branch) | | all of the above | 5,791 | 41 |
+| [`tier-1` · 9cff96f](https://github.com/siddarthar53/forge/tree/9cff96fb9b82cfa37bd065cb8390dc4b4d21349b) | 2026-10-30 | | 940 | 0 |
+| [`tier-2` · 4d32d67](https://github.com/siddarthar53/forge/tree/4d32d67f66fced87540f0ca4f30b81f0f789c92e) | 2026-10-31 | `tier-1` | 2,716 | 21 |
+| [`tier-3-mcp` · 09d748b](https://github.com/siddarthar53/forge/tree/09d748bd3f843a7513ed1b2bac09045bcea96931) | 2026-11-02 | `tier-2` | 3,580 | 27 |
+| [`tier-3-subagents` · 4ec5116](https://github.com/siddarthar53/forge/tree/4ec5116378fa25f11921fb9f71e0551ca904ad29) | 2026-11-02 | `tier-3-mcp` | 4,083 | 34 |
+| [`tier-3-vscode` · 806295a](https://github.com/siddarthar53/forge/tree/806295a95c1713f22bcb2998ac7459553abc8158) | 2026-11-02 | `tier-3-subagents` | 5,791 | 41 |
+| `main` (and every branch today) | | all of the above | 5,791 | 41 |
 
-<sub>Lines counted over `.js`/`.mjs` files, tests excluded. To see exactly what one tier added: `git diff snapshot/tier-1 snapshot/tier-2 --stat`.</sub>
+<sub>Lines counted over `.js`/`.mjs` files, tests excluded. To see exactly what one tier added: `git diff 9cff96f 4d32d67 --stat`.</sub>
 
 ## Principles I kept across tiers
 
@@ -97,7 +96,7 @@ session logged to a JSONL file.
 **What I found later:** in Tier 1, pressing Ctrl+C while a permission prompt
 was open did not cancel it, and if you then typed `y` the command still ran.
 The signal was never passed to the prompt. I confirmed it with a test and fixed
-it in Tier 2. The `snapshot/tier-1` tag keeps Tier 1 exactly as built, bug included.
+it in Tier 2. Commit `9cff96f` keeps Tier 1 exactly as built, bug included.
 
 ---
 
