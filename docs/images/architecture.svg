@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 716" width="1000" height="716" role="img" aria-label="DevPilot architecture: front ends, app core, agent loop, safety pipeline, tools, MCP servers and sub-agents" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#6b6f76"/></marker></defs>
+<rect width="1000" height="716" rx="12" fill="#ffffff"/>
+<rect x="40" y="30" width="270" height="64" rx="8" fill="#e8f1fb" stroke="#3b7dd8" stroke-width="1.25"/>
+<text x="175.0" y="54" text-anchor="middle" font-size="14" font-weight="600" fill="#0b2545">Terminal REPL <tspan font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-weight="400" font-size="12">src/chat.js</tspan></text>
+<text x="175.0" y="74" text-anchor="middle" font-size="12" fill="#0b2545">you type, it streams back</text>
+<rect x="380" y="30" width="270" height="64" rx="8" fill="#fdf1e3" stroke="#d9822b" stroke-width="1.25"/>
+<text x="515.0" y="54" text-anchor="middle" font-size="14" font-weight="600" fill="#4a2600">RPC front end <tspan font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-weight="400" font-size="12">src/rpc.js</tspan></text>
+<text x="515.0" y="74" text-anchor="middle" font-size="12" fill="#4a2600">devpilot --rpc</text>
+<rect x="730" y="30" width="230" height="64" rx="8" fill="#fdf1e3" stroke="#d9822b" stroke-width="1.25"/>
+<text x="845.0" y="54" text-anchor="middle" font-size="14" font-weight="600" fill="#4a2600">VS Code extension</text>
+<text x="845.0" y="74" text-anchor="middle" font-size="12" fill="#4a2600">chat panel · diff review</text>
+<line x1="652" y1="62" x2="728" y2="62" stroke="#6b6f76" stroke-width="1.25" marker-end="url(#a)" marker-start="url(#a)"/>
+<text x="690" y="54" text-anchor="middle" font-size="11.5" fill="#55595f">JSON lines</text>
+<rect x="40" y="134" width="610" height="64" rx="8" fill="#e8f1fb" stroke="#3b7dd8" stroke-width="1.25"/>
+<text x="345.0" y="158" text-anchor="middle" font-size="14" font-weight="600" fill="#0b2545">App core <tspan font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-weight="400" font-size="12">src/app.js</tspan></text>
+<text x="345.0" y="178" text-anchor="middle" font-size="12" fill="#0b2545">startup (settings, MCP servers, agents) · turns · sessions · slash commands</text>
+<path d="M730 142 a115.0 8 0 0 1 230 0 v48 a115.0 8 0 0 1 -230 0 z" fill="#e8f1fb" stroke="#3b7dd8" stroke-width="1.25"/>
+<path d="M730 142 a115.0 8 0 0 0 230 0" fill="none" stroke="#3b7dd8" stroke-width="1.25"/>
+<text x="845.0" y="164" text-anchor="middle" font-size="14" font-weight="600" fill="#0b2545">.devpilot/</text>
+<text x="845.0" y="184" text-anchor="middle" font-size="12" fill="#0b2545">session logs · settings · agents</text>
+<line x1="175" y1="94" x2="175" y2="132" stroke="#6b6f76" stroke-width="1.25" marker-end="url(#a)"/>
+<line x1="515" y1="94" x2="515" y2="132" stroke="#6b6f76" stroke-width="1.25" marker-end="url(#a)"/>
+<line x1="650" y1="166" x2="728" y2="166" stroke="#6b6f76" stroke-width="1.25" marker-end="url(#a)"/>
+<rect x="40" y="238" width="610" height="80" rx="8" fill="#e8f1fb" stroke="#3b7dd8" stroke-width="2"/>
+<text x="345.0" y="262" text-anchor="middle" font-size="14" font-weight="600" fill="#0b2545">Agent loop <tspan font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-weight="400" font-size="12">src/agent.js</tspan></text>
+<text x="345.0" y="282" text-anchor="middle" font-size="12" fill="#0b2545">stream the reply → run its tool calls → send the results back → repeat</text>
+<text x="345.0" y="298" text-anchor="middle" font-size="12" fill="#0b2545">compaction near the context limit · parallel read-only calls · loop detection</text>
+<rect x="730" y="238" width="230" height="80" rx="8" fill="#f4f4f5" stroke="#9a9aa0" stroke-width="1.25"/>
+<text x="845.0" y="262" text-anchor="middle" font-size="14" font-weight="600" fill="#2b2b30">LLM</text>
+<text x="845.0" y="282" text-anchor="middle" font-size="12" fill="#2b2b30">any tool-calling model</text>
+<text x="845.0" y="298" text-anchor="middle" font-size="12" fill="#2b2b30">via OpenRouter</text>
+<line x1="345" y1="198" x2="345" y2="236" stroke="#6b6f76" stroke-width="1.25" marker-end="url(#a)"/>
+<line x1="652" y1="278" x2="728" y2="278" stroke="#6b6f76" stroke-width="1.25" marker-end="url(#a)" marker-start="url(#a)"/>
+<text x="690" y="270" text-anchor="middle" font-size="11.5" fill="#55595f">streamed</text>
+<rect x="40" y="356" width="920" height="44" rx="8" fill="#f7f7f8" stroke="#b9bcc2" stroke-width="1.25"/>
+<text x="500" y="383" text-anchor="middle" font-size="12.5" fill="#2b2b30"><tspan font-weight="600">Every tool call:</tspan> schema check → plan-mode gate → deny / allow rules → your approval (with a diff) → checkpoint for /undo</text>
+<line x1="345" y1="318" x2="345" y2="354" stroke="#6b6f76" stroke-width="1.25" marker-end="url(#a)"/>
+<rect x="40" y="438" width="168" height="72" rx="8" fill="#e8f1fb" stroke="#3b7dd8" stroke-width="1.25"/>
+<text x="124.0" y="462" text-anchor="middle" font-size="14" font-weight="600" fill="#0b2545">File tools</text>
+<text x="124.0" y="482" text-anchor="middle" font-size="12" fill="#0b2545">read · list · grep</text>
+<text x="124.0" y="498" text-anchor="middle" font-size="12" fill="#0b2545">write · edit</text>
+<line x1="124" y1="400" x2="124" y2="436" stroke="#6b6f76" stroke-width="1.25" marker-end="url(#a)"/>
+<rect x="228" y="438" width="168" height="72" rx="8" fill="#e8f1fb" stroke="#3b7dd8" stroke-width="1.25"/>
+<text x="312.0" y="462" text-anchor="middle" font-size="14" font-weight="600" fill="#0b2545">Shell</text>
+<text x="312.0" y="482" text-anchor="middle" font-size="12" fill="#0b2545">host or Docker sandbox</text>
+<text x="312.0" y="498" text-anchor="middle" font-size="12" fill="#0b2545">timeout · deny list</text>
+<line x1="312" y1="400" x2="312" y2="436" stroke="#6b6f76" stroke-width="1.25" marker-end="url(#a)"/>
+<rect x="416" y="438" width="168" height="72" rx="8" fill="#e9f7ef" stroke="#2e9e5b" stroke-width="1.25"/>
+<text x="500.0" y="462" text-anchor="middle" font-size="14" font-weight="600" fill="#0b3d1f">Todo &amp; plan</text>
+<text x="500.0" y="482" text-anchor="middle" font-size="12" fill="#0b3d1f">todo_write</text>
+<text x="500.0" y="498" text-anchor="middle" font-size="12" fill="#0b3d1f">exit_plan_mode</text>
+<line x1="500" y1="400" x2="500" y2="436" stroke="#6b6f76" stroke-width="1.25" marker-end="url(#a)"/>
+<rect x="604" y="438" width="168" height="72" rx="8" fill="#fdf1e3" stroke="#d9822b" stroke-width="1.25"/>
+<text x="688.0" y="462" text-anchor="middle" font-size="14" font-weight="600" fill="#4a2600">MCP tools</text>
+<text x="688.0" y="482" text-anchor="middle" font-size="12" fill="#4a2600">mcp__server__tool</text>
+<text x="688.0" y="498" text-anchor="middle" font-size="12" fill="#4a2600">from any MCP server</text>
+<line x1="688" y1="400" x2="688" y2="436" stroke="#6b6f76" stroke-width="1.25" marker-end="url(#a)"/>
+<rect x="792" y="438" width="168" height="72" rx="8" fill="#fdf1e3" stroke="#d9822b" stroke-width="1.25"/>
+<text x="876.0" y="462" text-anchor="middle" font-size="14" font-weight="600" fill="#4a2600">task</text>
+<text x="876.0" y="482" text-anchor="middle" font-size="12" fill="#4a2600">starts a sub-agent,</text>
+<text x="876.0" y="498" text-anchor="middle" font-size="12" fill="#4a2600">gets its report back</text>
+<line x1="876" y1="400" x2="876" y2="436" stroke="#6b6f76" stroke-width="1.25" marker-end="url(#a)"/>
+<path d="M604 556 a84.0 8 0 0 1 168 0 v56 a84.0 8 0 0 1 -168 0 z" fill="#f4f4f5" stroke="#9a9aa0" stroke-width="1.25"/>
+<path d="M604 556 a84.0 8 0 0 0 168 0" fill="none" stroke="#9a9aa0" stroke-width="1.25"/>
+<text x="688.0" y="578" text-anchor="middle" font-size="14" font-weight="600" fill="#2b2b30">MCP servers</text>
+<text x="688.0" y="598" text-anchor="middle" font-size="12" fill="#2b2b30">GitHub, databases, …</text>
+<text x="688.0" y="614" text-anchor="middle" font-size="12" fill="#2b2b30">stdio or HTTP</text>
+<rect x="792" y="548" width="168" height="72" rx="8" fill="#fdf1e3" stroke="#d9822b" stroke-width="1.25"/>
+<text x="876.0" y="572" text-anchor="middle" font-size="14" font-weight="600" fill="#4a2600">Sub-agents</text>
+<text x="876.0" y="592" text-anchor="middle" font-size="12" fill="#4a2600">fresh context,</text>
+<text x="876.0" y="608" text-anchor="middle" font-size="12" fill="#4a2600">restricted tools</text>
+<line x1="688" y1="512" x2="688" y2="546" stroke="#6b6f76" stroke-width="1.25" marker-end="url(#a)" marker-start="url(#a)"/>
+<line x1="876" y1="510" x2="876" y2="546" stroke="#6b6f76" stroke-width="1.25" marker-end="url(#a)"/>
+<text x="40" y="560" font-size="12.5" font-weight="600" fill="#2b2b30">Colour = the tier that added it</text>
+<rect x="40" y="576" width="16" height="14" rx="3" fill="#e8f1fb" stroke="#3b7dd8"/>
+<text x="64" y="587" font-size="12" fill="#2b2b30">Tier 1 · the minimum viable agent</text>
+<rect x="40" y="598" width="16" height="14" rx="3" fill="#e9f7ef" stroke="#2e9e5b"/>
+<text x="64" y="609" font-size="12" fill="#2b2b30">Tier 2 · make it good</text>
+<rect x="40" y="620" width="16" height="14" rx="3" fill="#fdf1e3" stroke="#d9822b"/>
+<text x="64" y="631" font-size="12" fill="#2b2b30">Tier 3 · MCP, sub-agents, VS Code</text>
+<rect x="40" y="642" width="16" height="14" rx="3" fill="#f4f4f5" stroke="#9a9aa0"/>
+<text x="64" y="653" font-size="12" fill="#2b2b30">outside DevPilot</text>
+<text x="40" y="684" font-size="11.5" fill="#55595f">Tier 2 also added context management, prompt caching, session resume,</text>
+<text x="40" y="700" font-size="11.5" fill="#55595f">git and checkpoints inside the core boxes.</text>
+</svg>
