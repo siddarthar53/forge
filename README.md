@@ -1,379 +1,183 @@
 # DevPilot
 
-A coding agent for the terminal: an LLM in a loop with tools, pointed at a
-codebase. This branch adds a **VS Code extension** on top of
-the Tier 3 sub-agents branch, following the build plan in
-`Coding Agent Feature Map Claude Code, Codex, GitHub Copilot.md`.
+A coding agent built from scratch, one tier at a time: an LLM in a loop with
+tools, pointed at your codebase. It reads and edits code, runs commands and
+tests, and asks before it changes anything. It runs in the terminal or in VS Code.
 
-| Branch | Built on | Adds |
-| --- | --- | --- |
-| `tier-1` | | the minimum viable agent |
-| `tier-2` | `tier-1` | plan mode, context management, resume, git, sandbox, slash commands |
-| `tier-3-mcp` | `tier-2` | MCP client |
-| `tier-3-subagents` | `tier-3-mcp` | sub-agents and parallel tool calls |
-| `tier-3-vscode` | `tier-3-subagents` | VS Code extension and `--rpc` mode (this branch) |
+I built it to understand how agents like Claude Code, Codex and GitHub Copilot
+really work, so there is **no agent framework**: the loop, the tools, the
+context management and the safety checks are all plain JavaScript you can read.
 
-## Run it
-
-```bash
-npm install
-npm start                     # works on the DevPilot folder itself
-npm test                      # unit tests + a scripted replay of the agent loop
-```
-
-To use it on another project, run it from that project's folder:
-
-```bash
-cd path/to/some/project
-node "path/to/Coding Agent/index.js"
-# or once: `npm link` inside this folder, then just `devpilot` anywhere
-
-devpilot --continue           # pick up the most recent conversation here
-devpilot --resume             # choose a saved conversation from a list
-devpilot --rpc                # JSON-lines mode, used by the VS Code extension
-```
-
-`.env` (in this folder) needs:
+A typical session in the terminal (abridged):
 
 ```
-OPENROUTER_API_KEY=...
-OPENROUTER_MODEL=...          # must support tool calling
-DEVPILOT_MAX_STEPS=25         # optional
-```
+You: the login test is failing, fix it
 
-Optional Tier 2 settings:
-
-```
-DEVPILOT_COMPACT_AT=0.8       # auto-compact when the context is 80% full
-DEVPILOT_CONTEXT_WINDOW=...   # override the window read from OpenRouter
-DEVPILOT_AUTO_BRANCH=0        # don't create a devpilot/* branch before the first edit
-DEVPILOT_SANDBOX=docker       # run shell commands in a throwaway container
-DEVPILOT_SANDBOX_IMAGE=node:22
-DEVPILOT_SANDBOX_NETWORK=1    # allow network inside the sandbox (off by default)
-OPENROUTER_BASE_URL=...       # any OpenAI-compatible endpoint
-```
-
-Per-project rules go in `<project>/.devpilot/settings.json` (or
-`~/.devpilot/settings.json` for all projects):
-
-```json
-{
-  "permissions": {
-    "allow": ["npm test", "git status", "git diff"],
-    "deny": ["git push", "npm publish"]
-  },
-  "testCommand": "npm test"
-}
-```
-
-Keys: `y` / `n` / `a` (always) at a permission prompt, or type feedback to
-decline with a reason. **Ctrl+C** stops the current task; at the `You:` prompt
-it quits. `exit` also quits.
-
-## Slash commands
-
-| Command | What it does |
-| --- | --- |
-| `/help` | List the commands. |
-| `/plan` | Toggle plan mode: read-only exploring, then a plan you approve. |
-| `/todos` | Show the agent's checklist. |
-| `/test [cmd]` | Run the tests; on failure the agent fixes and DevPilot reruns (max 3 rounds). |
-| `/undo` | Undo the last turn: restore the files it changed and rewind the chat. |
-| `/commit [msg]` | Commit all changes; without a message the model writes one for you to approve. |
-| `/compact [focus]` | Summarize the conversation to free up context. |
-| `/context` | How full the context window is. |
-| `/cost` | Tokens (and how many came from the cache) and dollars for this conversation. |
-| `/model [id]` | Show or switch the model. |
-| `/mcp` | MCP servers: status, tools, errors. |
-| `/agents` | Sub-agents the model can start, with their tools. |
-| `/clear` | Start a fresh conversation (the old one stays saved). |
-| `/sessions`, `/resume [n]` | List or continue saved conversations. |
-| `/exit` | Quit. |
-
-## File map (read in this order)
-
-| File | What it does |
-| --- | --- |
-| `index.js` | Flags (`--continue`, `--resume`, `--rpc`), `.env` config, the API client. |
-| `src/app.js` | The app without a UI: startup (settings, MCP, agents), turns, sessions, commands. |
-| `src/chat.js` | The terminal front end: readline prompt, Ctrl+C, status line. |
-| `src/rpc.js` | The editor front end: JSON lines over stdin/stdout (`--rpc`). |
-| `src/agent.js` | **The agent loop.** Streaming, tool calls (in parallel when safe), usage, auto-compaction, loop detection, reporters. |
-| `src/commands.js` | Every slash command. |
-| `src/tools/index.js` | Toolsets (which tools an agent sees), JSON Schema validation, the plan-mode gate, result size cap. |
-| `src/tools/files.js` | `read_file`, `list_files`, `grep` (all `.gitignore`-aware), `write_file`, `edit_file`. |
-| `src/tools/shell.js` | `run_shell`: host shell or Docker sandbox, deny list, timeout, truncation. |
-| `src/tools/todo.js` | `todo_write`: the agent's checklist. |
-| `src/tools/plan.js` | `exit_plan_mode`: the agent asks you to approve its plan. |
-| `src/tools/workspace.js` | Path safety, `.env` protection, protected folders (`.git`, `.devpilot`). |
-| `src/safety.js` | Deny list for dangerous commands, allow/deny rules from settings. |
-| `src/settings.js` | Loads `.devpilot/settings.json`. |
-| `src/context.js` | Token counting, model info (window, prices), cost. |
-| `src/compact.js` | Summarize-and-replace when the context fills up. |
-| `src/caching.js` | Prompt-cache breakpoints for Claude models. |
-| `src/session.js` | History + JSONL log; replaying the log to resume. |
-| `src/checkpoints.js` | File snapshots per turn, for `/undo`. |
-| `src/git.js` | Work branches, commit messages, commits. |
-| `src/testloop.js` | The test-fix loop behind `/test`. |
-| `src/mcp/client.js` | MCP over JSON-RPC: stdio and Streamable HTTP transports, handshake, cancellation. |
-| `src/mcp/config.js` | `.mcp.json` / `~/.devpilot/mcp.json`, `${VAR}` expansion, trusting project servers. |
-| `src/mcp/index.js` | Connects servers at startup and turns their tools into DevPilot tools. |
-| `src/subagents.js` | Built-in and custom sub-agents, and the `task` tool that runs them. |
-| `src/permissions.js` | The y / n / always prompt (queued, so parallel agents ask one at a time). |
-| `src/prompt.js` | The system prompt (stable for caching) and the plan-mode reminder. |
-| `src/ui.js` | Colors, diffs, number formatting, the `terminal` output object. |
-| `test/` | `node --test` suites; `agent.test.js` replays scripted model streams. |
-| `vscode-extension/` | The VS Code extension (its own README, package and tests). |
-
-## What happens in one turn
-
-```
-You: "fix the failing test"
-  │
-  ▼
-history = [system prompt, ...earlier messages, your message (+ plan-mode reminder)]
-  │
-  ▼
-┌─► context nearly full? ──► yes: summarize history, replace it, continue
-│        │
-│        ▼
-│   model call (streamed, cache breakpoints added) ──► text?  print it
-│        │                                                   usage? count tokens + cost
-│        └──────────────────────────────────────────────► tool calls?  for each one:
-│                                                            validate args
-│                                                            plan mode? only read-only tools
-│                                                            deny list / allow rules (shell)
-│                                                            ask permission (edits, shell)
-│                                                            snapshot the file (for /undo)
-│                                                            run it, push {role:"tool"} result
-│                                                            same call + same result 3x? nudge
-└──────────── loop again with the results added ◄─────────┘
-
-stops when the model replies with no tool calls, you press Ctrl+C,
-or it hits DEVPILOT_MAX_STEPS
-```
-
-## Tier 1 concepts (still here)
-
-1. **Tool calling.** The model never runs anything itself; our code does
-   (`tools/index.js` → `executeToolCall`).
-2. **Streaming tool calls.** Arguments arrive in pieces and are glued together
-   by `index` (`agent.js` → `streamAssistantMessage`).
-3. **History must stay valid.** Every `tool_call` needs a matching `tool`
-   message, even when cancelled, and now even after a crash (`session.js` →
-   `repairHistory`).
-4. **Errors are results** the model can read and fix.
-5. **String-replace edits** with unique `old_string`.
-6. **Read-before-write + stale detection** (`files.js` → `assertFreshRead`).
-7. **Permissions.** Read-only tools run freely; edits and commands ask.
-8. **Bounded tools.** Caps everywhere, plus a final cap on any tool result.
-9. **Prompt-injection awareness.** Tool output is data, not instructions.
-10. **Cancellation.** One `AbortController` per turn, now also passed to every
-    permission prompt (Tier 1 forgot this, so Ctrl+C could not cancel one).
-
-## Tier 2 concepts, and where they live
-
-11. **Todo list.** The model keeps its own checklist (`tools/todo.js`). It
-    sends the full list each time, so one call can add, reorder and check off.
-12. **Plan mode** (`tools/plan.js`, gate in `tools/index.js`). The tool list
-    and system prompt stay the same; a reminder rides on each user message
-    instead. That keeps the cached prompt prefix valid.
-13. **Token counting** (`context.js`, `session.js`). Exact counts come from
-    the API's `usage` after each call; only messages added since then are
-    estimated (about 4 characters per token).
-14. **Auto-compaction** (`compact.js`). Near the limit, the model summarizes
-    the conversation (goal, decisions, files, state, next steps) and the
-    history is replaced by the summary. File reads are forgotten too, so the
-    model must re-read before editing.
-15. **Prompt caching** (`caching.js`). OpenAI-style providers cache repeated
-    prefixes automatically; Claude needs `cache_control` breakpoints, added
-    to a copy of the messages at request time. `/cost` shows the cache hit rate.
-16. **Session resume** (`session.js`). The JSONL log is replayed:
-    `message` appends, `reset` replaces (compaction, undo), plus todos and usage.
-17. **Git integration** (`git.js`). A `devpilot/*` branch before the first
-    edit on main; `/commit` with a model-written message that you approve;
-    secrets and `.devpilot/` are never committed.
-18. **Checkpoints** (`checkpoints.js`). The bytes of each file before its first
-    change in a turn; `/undo` restores them and rewinds the conversation.
-19. **Sandbox and deny list** (`tools/shell.js`, `safety.js`). Docker with no
-    network and only the workspace mounted; a deny list for disasters; allow
-    rules only for simple commands, so `npm test && rm -rf src` is not
-    auto-allowed by an `npm test` rule.
-20. **Test-fix loop** (`testloop.js`). DevPilot runs the tests itself, so the
-    model cannot declare victory without them passing.
-21. **Loop detection** (`agent.js`). Same call, same result, three times in a
-    turn: the result gets a nudge to change approach.
-22. **`.gitignore` support** in `list_files` and `grep` via `git check-ignore`.
-
-## Tier 3: MCP
-
-MCP (Model Context Protocol) lets DevPilot use tools from any MCP server:
-GitHub, Postgres, Sentry, a browser, your own. Configure servers in
-`<project>/.mcp.json` (shared with the team) or `~/.devpilot/mcp.json`
-(just you). It is the same format Claude Code uses:
-
-```json
-{
-  "mcpServers": {
-    "github": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-github"],
-      "env": { "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}" },
-      "tools": ["get_*", "search_*", "list_*"]
-    },
-    "docs": {
-      "url": "https://example.com/mcp",
-      "headers": { "Authorization": "Bearer ${DOCS_TOKEN}" },
-      "timeout": 60
-    }
-  }
-}
-```
-
-- `command` + `args` + `env`: a local server DevPilot starts (stdio).
-  `url` + `headers`: a remote server (Streamable HTTP).
-- `${VAR}` is read from your environment, so tokens stay out of the file.
-- `tools` is an allow-list (`*` matches a prefix); `disabled: true` skips a server.
-- A project `.mcp.json` can start any program, so DevPilot asks before
-  trusting each server, and asks again if its command or URL changes
-  (remembered in `~/.devpilot/mcp-trust.json`).
-- Every MCP tool call asks permission. Skip the prompt for specific tools
-  in `.devpilot/settings.json`: `"allow": ["mcp__github__get_*"]`, or
-  block them with `"deny"`.
-- In plan mode only tools the server marks `readOnlyHint` are available.
-- If a server offers resources, `mcp_list_resources` and `mcp_read_resource`
-  let the model read them.
-
-Concepts, and where they live:
-
-23. **JSON-RPC by hand** (`mcp/client.js`). Requests have an `id` and get a
-    response; notifications don't. A pending-request map matches replies to
-    callers; timeouts and Ctrl+C send `notifications/cancelled`.
-24. **Two transports.** stdio: newline-delimited JSON over a child process's
-    pipes, stderr kept for error messages. Streamable HTTP: one POST per
-    message, the reply is JSON or a short event stream, plus the
-    `Mcp-Session-Id` header.
-25. **Tools are data.** Each server tool becomes a normal DevPilot tool named
-    `mcp__<server>__<tool>` with the server's own description and JSON
-    Schema; the agent loop does not know the difference.
-26. **Stable tool list.** Servers connect before the first model call, so
-    the tools stay fixed and the prompt cache keeps working. A server that
-    announces new tools is noted in `/mcp`; restart to pick them up.
-27. **Trust boundaries.** Untrusted config is not executed silently, MCP
-    output is treated as data, and secrets come from the environment.
-
-Not done (yet): OAuth login for remote servers (use a token in `headers`),
-the old SSE transport, MCP prompts as slash commands, and sampling/roots.
-
-## Tier 3: sub-agents
-
-The main agent can hand a self-contained job to a **sub-agent** with its
-own fresh context window and a restricted set of tools, using the `task`
-tool. Only the sub-agent's final report comes back, so a search through 30
-files costs the main conversation a few hundred tokens instead of 30 files.
-
-```
-⏺ task {"agent":"explorer","description":"Find auth", ...}
-  ⧉ explorer#1 Find auth
-⏺ task {"agent":"explorer","description":"Find db", ...}
-  ⧉ explorer#2 Find db
+⏺ task {"agent":"explorer","description":"Find login code"}
   ↳ explorer#1 grep {"pattern":"login"}
-  ↳ explorer#2 grep {"pattern":"db"}
-  ✓ explorer#2 done · 2 steps · 2.0k tokens
-  ✓ explorer#1 done · 2 steps · 2.0k tokens
+  ✓ explorer#1 done · 3 steps · 4.1k tokens
+⏺ read_file {"path":"src/auth.js"}
+⏺ edit_file {"path":"src/auth.js", ...}
+
+--- src/auth.js
++++ src/auth.js
+-  return user.name;
++  return user?.name;
+
+? Edit src/auth.js
+  [y] yes  [n] no  [a] always allow file edits this session  (or type feedback)
+  > y
+⏺ run_shell {"command":"npm test"}
+? Run: npm test  > y
+  ⎿ Exit code: 0
+Fixed: login() now handles a missing user. All 12 tests pass.
 ```
 
-| Agent | Tools | Use |
-| --- | --- | --- |
-| `explorer` | read, list, grep, read-only MCP tools | Broad searches and "how does X work" questions. Read-only, so several run at once, also in plan mode. |
-| `reviewer` | read tools + `run_shell` | Reviews the git diff for bugs and edge cases, can run tests, never edits. |
-| `general` | everything except `task`, todos and plan tools | A self-contained chunk of work; edits still ask you. |
+## What it can do
 
-Add your own as Markdown files in `<project>/.devpilot/agents/` (or
-`~/.devpilot/agents/` for every project). A project agent with a built-in's
-name replaces it.
+- **Work in your codebase.** Read, search, edit (with a diff you approve) and
+  run shell commands, optionally inside a Docker sandbox with no network.
+- **Handle long tasks.** It keeps a todo list, compacts the conversation before
+  the context fills up, caches the prompt to cut cost, and resumes saved sessions.
+- **Stay safe.** It asks before every edit or command, blocks dangerous commands,
+  moves off `main` to its own branch before its first edit, and `/undo`
+  reverts a whole turn.
+- **Plan first** (`/plan`): read-only exploring, then a plan you approve.
+- **Delegate to sub-agents:** an `explorer` searches the code in its own
+  context and returns a short report; a `reviewer` checks your diff.
+- **Use any MCP server** (GitHub, databases, browsers…), configured like Claude Code.
+- **Live in VS Code:** a chat panel, proposed edits in the native diff view,
+  and your open file, selection and problems sent with each message.
 
-```markdown
----
-name: test-writer
-description: Writes unit tests for one module, following the project's style.
-tools: read_file, list_files, grep, write_file, edit_file, run_shell
-model: anthropic/claude-haiku-4.5
----
-You write focused unit tests. Read the module and its existing tests first,
-match their style, and run the tests before you report back.
+## Architecture
+
+![DevPilot architecture: front ends, app core, agent loop, the safety pipeline every tool call passes, the tools, MCP servers and sub-agents](docs/images/architecture.svg)
+
+Read it top to bottom. A front end (terminal or VS Code) hands your message to
+the **app core**. The **agent loop** streams the model's reply and runs the tools
+it asks for. Every tool call goes through the **same safety pipeline**, whether
+it comes from the main agent, a sub-agent or an MCP server. The colours show
+which tier added each part.
+
+More diagrams (one turn of the loop, a tool call's checks, sub-agents, MCP, the
+VS Code protocol, what is saved where): **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
+
+## How I built it: tier by tier
+
+Instead of trying to build everything at once, I studied a feature map of
+Claude Code, Codex and Copilot, split their features into tiers, and built one
+tier at a time. Each tier had to work end to end, with tests, before the next
+began, and each lives on its own branch:
+
+```mermaid
+flowchart LR
+    t1["<b>Tier 1</b><br/>minimum viable agent"] --> t2["<b>Tier 2</b><br/>make it good"] --> t3a["<b>Tier 3</b><br/>MCP"] --> t3b["<b>Tier 3</b><br/>sub-agents"] --> t3c["<b>Tier 3</b><br/>VS Code"] --> main(["main"])
+    classDef t1 fill:#e8f1fb,stroke:#3b7dd8,color:#0b2545
+    classDef t2 fill:#e9f7ef,stroke:#2e9e5b,color:#0b3d1f
+    classDef t3 fill:#fdf1e3,stroke:#d9822b,color:#4a2600
+    class t1 t1
+    class t2 t2
+    class t3a,t3b,t3c t3
 ```
 
-`tools` takes names or prefixes (`mcp__github__*`), and `mcp:read-only` for
-every read-only MCP tool. `model` is optional (default: the main model).
-`DEVPILOT_SUBAGENT_MAX_STEPS` (default 30) caps each run.
+| Tier | The question it answered | What I added | Lines | Tests |
+| --- | --- | --- | --- | --- |
+| [**1** · minimum viable agent](https://github.com/siddarthar53/forge/tree/tier-1) | Can an LLM in a loop change code safely? | Agent loop with streaming tool calls · read, list, grep, edit, shell · y/n/always permissions with diffs · `AGENTS.md` · session logs | 940 | 0 |
+| [**2** · make it good](https://github.com/siddarthar53/forge/tree/tier-2) | Can I use it for a real, long task? | Todos and plan mode · token counting and auto-compaction · prompt caching · resume · git branch, commit, `/undo` · Docker sandbox and deny list · slash commands · test-fix loop | 2,716 | 21 |
+| [**3** · MCP](https://github.com/siddarthar53/forge/tree/tier-3-mcp) | Can it use tools I didn't write? | Hand-written MCP client (stdio and HTTP) · server tools become normal tools · trust prompt for project servers | 3,580 | 27 |
+| [**3** · sub-agents](https://github.com/siddarthar53/forge/tree/tier-3-subagents) | Can it work in a big codebase without drowning in context? | `task` tool · explorer, reviewer, general and custom agents · restricted toolsets · parallel read-only calls | 4,083 | 34 |
+| [**3** · VS Code](https://github.com/siddarthar53/forge/tree/tier-3-vscode) | Can it live where developers work? | App core split from the terminal UI · `--rpc` JSON-lines protocol · VS Code chat panel with native diff review | 5,791 | 41 |
 
-Concepts, and where they live:
+<sub>Lines: JavaScript source, tests excluded. See exactly what a tier added with `git diff origin/tier-1 origin/tier-2 --stat`.</sub>
 
-28. **Context isolation** (`subagents.js`). A sub-agent is just `runAgent`
-    again with a new session, a new system prompt and its own `readFiles`
-    map. Its log goes to `.devpilot/subagents/`; the main log records which file.
-29. **Toolsets** (`tools/index.js`). The model only sees the tools in its
-    toolset, and calls to anything else are refused, so "read-only" is
-    enforced, not just requested. Sub-agents never get `task` (no nesting).
-30. **Parallel tool calls** (`agent.js` → `groupForParallel`). Neighbouring
-    calls that are read-only and never prompt (reads, greps, read-only
-    agents) run with `Promise.all`; results go back in the original order.
-31. **Shared safety.** Sub-agents use your permission prompts (labelled
-    `[explorer#2]` and queued one at a time), your allow/deny rules, the
-    sandbox, and the same `/undo` checkpoint as the turn that started them.
-    Their tokens and cost are added to `/cost`.
-32. **Reporters** (`agent.js`). The loop reports events (text, tool call,
-    result, notice) instead of printing, so the same loop drives the
-    terminal, a sub-agent's one-line summaries, or an editor.
+A few decisions that shaped the whole project:
 
-## Tier 3: VS Code extension
+- **No framework, so every line is explainable.** The loop calls an
+  OpenAI-compatible API directly and glues streamed tool-call fragments together
+  itself.
+- **Refactor only when a feature needs it.** Toolsets arrived with sub-agents,
+  and the app/front-end split arrived with VS Code, not before.
+- **One safety pipeline for everything.** MCP tools, sub-agents and the editor
+  all reuse the permissions, rules and checkpoints from Tiers 1 and 2.
+- **Never change the prompt prefix mid-session**, so prompt caching keeps
+  working. This is why plan mode is a message reminder, not a new system prompt.
 
-`vscode-extension/` puts DevPilot in a VS Code side panel: streaming chat,
-expandable tool calls and sub-agent progress, the checklist, proposed
-changes in VS Code's diff view (accept or reject from the diff editor's
-title bar), and the open file, selection and problems sent with each
-message. See `vscode-extension/README.md` for setup.
+The full story, with the reasoning, trade-offs and the bugs I found at each
+step: **[docs/BUILD-LOG.md](docs/BUILD-LOG.md)**.
+
+## Quick start
+
+Needs Node.js 22+ and an [OpenRouter](https://openrouter.ai) API key.
 
 ```bash
-cd vscode-extension
+git clone https://github.com/siddarthar53/forge.git
+cd forge
 npm install
-npm run package    # -> devpilot-0.1.0.vsix with DevPilot bundled inside
+cp .env.example .env     # add your API key and a tool-calling model
+npm start                # chat with DevPilot about its own code
 ```
 
-Then *Extensions* → `…` → *Install from VSIX…*, run *DevPilot: Set
-OpenRouter API Key*, and set `devpilot.model`.
+Run it on your own project from that project's folder:
+`node path/to/forge/index.js`. Type `/help` for commands.
 
-The extension does not reimplement the agent. It runs `devpilot --rpc`
-and talks to it in JSON lines, the way the Codex extension talks to its app
-server:
+For VS Code, build the extension (`cd vscode-extension && npm install && npm
+run package`) and install the `.vsix`.
+
+<details>
+<summary>The VS Code chat panel</summary>
+
+<img src="docs/images/vscode-chat.png" alt="DevPilot chat panel in VS Code: an explorer sub-agent's progress, tool calls, a proposed edit with Apply / Always / Deny, the checklist and the status footer" width="380">
+
+<sub>Rendered with sample data using VS Code's Dark+ theme colours.</sub>
+</details>
+
+All commands and settings: **[docs/USAGE.md](docs/USAGE.md)**.
+
+## Repository map
 
 ```
-editor  → {"type":"prompt","text":"fix the typo","context":{"activeFile":{...},"selection":{...}}}
-DevPilot→ {"type":"tool_call","name":"edit_file",...}
-DevPilot→ {"type":"approval_request","id":3,"title":"Edit app.js","diff":{"oldText":...,"newText":...}}
-editor  → {"type":"approval","id":3,"answer":"y"}
-DevPilot→ {"type":"text","delta":"Fixed."} ... {"type":"turn_end","status":"done"}
+index.js              entry point: flags, .env config, API client
+src/
+  chat.js  rpc.js     front ends: terminal, and JSON lines for editors
+  app.js              app core: startup, turns, sessions
+  agent.js            the agent loop
+  commands.js         slash commands
+  tools/              the tools, toolsets and schema validation
+  safety.js  permissions.js  checkpoints.js  settings.js
+  context.js  compact.js  caching.js  session.js  prompt.js
+  git.js  testloop.js
+  mcp/                MCP client, config, tool adapter
+  subagents.js        built-in and custom sub-agents
+test/                 node --test suites, incl. scripted model replays
+vscode-extension/     the VS Code extension (own README and tests)
+docs/                 architecture, build log, usage
 ```
 
-Concepts, and where they live:
+Start reading at `src/agent.js`: the loop is about 200 lines and explains the
+rest.
 
-33. **One core, two front ends** (`app.js`). The terminal and the editor give
-    the app the same three things: `ask`, `approve` and a reporter. Nothing
-    in the agent loop knows which one it is talking to.
-34. **A protocol instead of a library** (`rpc.js`). stdout carries only JSON;
-    `console.log` output is captured as `log` events so nothing corrupts the
-    stream. Approvals and questions are request/response pairs with ids,
-    cancelled with `request_cancelled` when you press Stop.
-35. **Editor context as data.** The extension sends structure (path,
-    selection, diagnostics); DevPilot formats it into an `<editor-context>`
-    block, so the model sees the same thing from any editor.
-36. **Native diff review** (`vscode-extension/extension.js`). The approval's
-    old and new text are served by a virtual document provider and shown
-    with `vscode.diff`; the diff tab closes when you answer.
+## Testing
 
-## Not in Tier 3 yet
+```bash
+npm test                                   # 37 tests
+cd vscode-extension && npm test            # 4 extension tests
+cd vscode-extension && npm run check       # type-check against the VS Code API
+```
 
-Still open:
-hooks, skills, headless mode and a GitHub Action, embedding search,
-background mode. And Tier 4: an evaluation benchmark to measure all of this.
+The tests run without an API key: a scripted fake model streams replies and
+tool calls, so the loop, compaction, sub-agents, MCP (against a fixture
+server) and the editor protocol are tested end to end.
+
+**Honest status:** everything above is tested with scripted models. The MCP
+client was also checked against the official MCP reference server, and the
+sandbox against real Docker. Runs with real models, on Windows and inside real
+VS Code are the next step.
+
+## What's next
+
+- **Tier 4: evaluation.** A benchmark of 20 to 50 tasks with hidden tests,
+  measuring pass rate, steps, tokens and cost, then changing one thing at a time
+  (sub-agents on vs off, compaction on vs off) to show the effect. First this
+  needs a headless mode (`devpilot -p "<task>" --auto-approve`).
+- **Not built yet:** hooks, skills, custom slash commands, web search, `@file`
+  mentions, opening PRs, a GitHub Action, OAuth for remote MCP servers.
