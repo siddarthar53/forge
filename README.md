@@ -67,7 +67,8 @@ VS Code protocol, what is saved where): **[docs/ARCHITECTURE.md](docs/ARCHITECTU
 Instead of trying to build everything at once, I studied a feature map of
 Claude Code, Codex and Copilot, split their features into tiers, and built one
 tier at a time. Each tier had to work end to end, with tests, before the next
-began, and each lives on its own branch:
+began. The code as it stood at the end of each tier is saved as a tag
+(`snapshot/tier-1`, `snapshot/tier-2`, …), so you can browse or diff any stage:
 
 ```mermaid
 flowchart LR
@@ -82,13 +83,13 @@ flowchart LR
 
 | Tier | The question it answered | What I added | Lines | Tests |
 | --- | --- | --- | --- | --- |
-| [**1** · minimum viable agent](https://github.com/siddarthar53/forge/tree/tier-1) | Can an LLM in a loop change code safely? | Agent loop with streaming tool calls · read, list, grep, edit, shell · y/n/always permissions with diffs · `AGENTS.md` · session logs | 940 | 0 |
-| [**2** · make it good](https://github.com/siddarthar53/forge/tree/tier-2) | Can I use it for a real, long task? | Todos and plan mode · token counting and auto-compaction · prompt caching · resume · git branch, commit, `/undo` · Docker sandbox and deny list · slash commands · test-fix loop | 2,716 | 21 |
-| [**3** · MCP](https://github.com/siddarthar53/forge/tree/tier-3-mcp) | Can it use tools I didn't write? | Hand-written MCP client (stdio and HTTP) · server tools become normal tools · trust prompt for project servers | 3,580 | 27 |
-| [**3** · sub-agents](https://github.com/siddarthar53/forge/tree/tier-3-subagents) | Can it work in a big codebase without drowning in context? | `task` tool · explorer, reviewer, general and custom agents · restricted toolsets · parallel read-only calls | 4,083 | 34 |
-| [**3** · VS Code](https://github.com/siddarthar53/forge/tree/tier-3-vscode) | Can it live where developers work? | App core split from the terminal UI · `--rpc` JSON-lines protocol · VS Code chat panel with native diff review | 5,791 | 41 |
+| [**1** · minimum viable agent](https://github.com/siddarthar53/forge/tree/snapshot/tier-1) | Can an LLM in a loop change code safely? | Agent loop with streaming tool calls · read, list, grep, edit, shell · y/n/always permissions with diffs · `AGENTS.md` · session logs | 940 | 0 |
+| [**2** · make it good](https://github.com/siddarthar53/forge/tree/snapshot/tier-2) | Can I use it for a real, long task? | Todos and plan mode · token counting and auto-compaction · prompt caching · resume · git branch, commit, `/undo` · Docker sandbox and deny list · slash commands · test-fix loop | 2,716 | 21 |
+| [**3** · MCP](https://github.com/siddarthar53/forge/tree/snapshot/tier-3-mcp) | Can it use tools I didn't write? | Hand-written MCP client (stdio and HTTP) · server tools become normal tools · trust prompt for project servers | 3,580 | 27 |
+| [**3** · sub-agents](https://github.com/siddarthar53/forge/tree/snapshot/tier-3-subagents) | Can it work in a big codebase without drowning in context? | `task` tool · explorer, reviewer, general and custom agents · restricted toolsets · parallel read-only calls | 4,083 | 34 |
+| [**3** · VS Code](https://github.com/siddarthar53/forge/tree/snapshot/tier-3-vscode) | Can it live where developers work? | App core split from the terminal UI · `--rpc` JSON-lines protocol · VS Code chat panel with native diff review | 5,791 | 41 |
 
-<sub>Lines: JavaScript source, tests excluded. See exactly what a tier added with `git diff origin/tier-1 origin/tier-2 --stat`.</sub>
+<sub>Lines: JavaScript source, tests excluded. See exactly what a tier added with `git diff snapshot/tier-1 snapshot/tier-2 --stat`.</sub>
 
 A few decisions that shaped the whole project:
 

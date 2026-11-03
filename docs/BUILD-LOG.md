@@ -4,7 +4,8 @@ I did not try to build a Claude Code clone in one go. I started from a feature
 map of three real coding agents (Claude Code, OpenAI Codex, GitHub Copilot),
 sorted their features into tiers, and built one tier at a time. **Each tier
 had to run and be demo-able before the next one started**, and each lives on
-its own branch so the growth is visible:
+its own branch. The code at the end of each tier is saved as a tag
+(`snapshot/tier-1` … `snapshot/tier-3-vscode`), so the growth stays visible:
 
 ```mermaid
 flowchart LR
@@ -22,16 +23,16 @@ flowchart LR
     class t3a,t3b,t3c t3
 ```
 
-| Branch | Date | Built on | JS source lines | Tests |
+| Snapshot tag | Date | Built on | JS source lines | Tests |
 | --- | --- | --- | --- | --- |
-| [`tier-1`](https://github.com/siddarthar53/forge/tree/tier-1) | 2026-10-30 | | 940 | 0 |
-| [`tier-2`](https://github.com/siddarthar53/forge/tree/tier-2) | 2026-10-31 | `tier-1` | 2,716 | 21 |
-| [`tier-3-mcp`](https://github.com/siddarthar53/forge/tree/tier-3-mcp) | 2026-11-02 | `tier-2` | 3,580 | 27 |
-| [`tier-3-subagents`](https://github.com/siddarthar53/forge/tree/tier-3-subagents) | 2026-11-02 | `tier-3-mcp` | 4,083 | 34 |
-| [`tier-3-vscode`](https://github.com/siddarthar53/forge/tree/tier-3-vscode) | 2026-11-02 | `tier-3-subagents` | 5,791 | 41 |
-| `main` | | all of the above | 5,791 | 41 |
+| [`snapshot/tier-1`](https://github.com/siddarthar53/forge/tree/snapshot/tier-1) | 2026-10-30 | | 940 | 0 |
+| [`snapshot/tier-2`](https://github.com/siddarthar53/forge/tree/snapshot/tier-2) | 2026-10-31 | `tier-1` | 2,716 | 21 |
+| [`snapshot/tier-3-mcp`](https://github.com/siddarthar53/forge/tree/snapshot/tier-3-mcp) | 2026-11-02 | `tier-2` | 3,580 | 27 |
+| [`snapshot/tier-3-subagents`](https://github.com/siddarthar53/forge/tree/snapshot/tier-3-subagents) | 2026-11-02 | `tier-3-mcp` | 4,083 | 34 |
+| [`snapshot/tier-3-vscode`](https://github.com/siddarthar53/forge/tree/snapshot/tier-3-vscode) | 2026-11-02 | `tier-3-subagents` | 5,791 | 41 |
+| `main` (and every branch) | | all of the above | 5,791 | 41 |
 
-<sub>Lines counted over `.js`/`.mjs` files, tests excluded. To see exactly what one tier added: `git diff origin/tier-1 origin/tier-2 --stat`.</sub>
+<sub>Lines counted over `.js`/`.mjs` files, tests excluded. To see exactly what one tier added: `git diff snapshot/tier-1 snapshot/tier-2 --stat`.</sub>
 
 ## Principles I kept across tiers
 
@@ -96,8 +97,7 @@ session logged to a JSONL file.
 **What I found later:** in Tier 1, pressing Ctrl+C while a permission prompt
 was open did not cancel it, and if you then typed `y` the command still ran.
 The signal was never passed to the prompt. I confirmed it with a test and fixed
-it in Tier 2. The fix stays out of the `tier-1` branch on purpose, to keep that
-branch as built.
+it in Tier 2. The `snapshot/tier-1` tag keeps Tier 1 exactly as built, bug included.
 
 ---
 
@@ -164,7 +164,7 @@ sandbox and a deny list; slash commands; a test-fix loop.
 ## Tier 3: stand-out features
 
 The feature map offered eight Tier 3 options. I picked three that build on each
-other, and gave each its own branch stacked on the previous one:
+other, and built each on top of the previous one:
 
 - **MCP:** the standard way to plug in tools and data, supported by all three
   products. It makes the agent extensible without me writing every tool.
