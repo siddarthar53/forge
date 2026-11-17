@@ -10,7 +10,7 @@
 //
 // Results go to evals/results/<label>/: summary.md, summary.json, runs.jsonl
 // and each run's session log.
-import { copyFileSync, existsSync, mkdirSync, writeFileSync, appendFileSync } from "node:fs";
+import { appendFileSync, copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { analyzeEvents, readEvents } from "./lib/analyze.js";
@@ -20,8 +20,22 @@ import { grade, loadTasks, prepareWorkspace } from "./lib/tasks.js";
 
 const RESULTS_DIR = fileURLToPath(new URL("./results", import.meta.url));
 
+// The model DevPilot will use: --model, else OPENROUTER_MODEL from the
+// environment or DevPilot's .env (read the same way DevPilot reads it).
+function resolveModel(opts) {
+  if (opts.model) return opts.model;
+  if (process.env.OPENROUTER_MODEL) return process.env.OPENROUTER_MODEL;
+  const envFile = fileURLToPath(new URL("../.env", import.meta.url));
+  if (!existsSync(envFile)) return null;
+  const line = readFileSync(envFile, "utf8").split(/\r?\n/).find((l) => /^\s*OPENROUTER_MODEL\s*=/.test(l));
+  return line ? line.split("=").slice(1).join("=").trim().replace(/^["']|["']$/g, "") : null;
+}
+
+// Provider errors that are not the agent's fault (rate limits, outages).
+const INFRA_ERROR = /\b(429|rate.?limit|too many requests|502|503|overloaded|upstream|provider returned error)\b/i;
+
 function parseArgs(argv) {
-  const opts = { runs: 1, tasks: null, model: null, label: null, out: null, env: {}, approve: "safe", concurrency: 1, timeoutMin: 6 };
+  const opts = { runs: 1, tasks: null, model: null, label: null, out: null, env: {}, approve: "safe", concurrency: 1, timeoutMin: 6, freeOnly: false, maxCost: Infinity };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     const next = () => {
@@ -36,6 +50,8 @@ function parseArgs(argv) {
     else if (arg === "--approve") opts.approve = next();
     else if (arg === "--concurrency") opts.concurrency = Number(next());
     else if (arg === "--timeout") opts.timeoutMin = Number(next());
+    else if (arg === "--free-only") opts.freeOnly = true;
+    else if (arg === "--max-cost") opts.maxCost = Number(next());
     else if (arg === "--env") {
       const [key, ...rest] = next().split("=");
       opts.env[key] = rest.join("=");
@@ -52,7 +68,11 @@ function parseArgs(argv) {
 function readHelp() {
   return `Usage: node evals/run.js [--runs N] [--tasks ids|categories] [--model id] [--label name]
                           [--env KEY=VALUE]... [--approve safe|all] [--concurrency N] [--timeout minutes]
-                          [--out folder]`;
+                          [--out folder] [--free-only] [--max-cost dollars]
+
+  --free-only        refuse to run unless the model id ends in ":free", and stop
+                     if any run reports a cost above $0
+  --max-cost N       stop starting new runs once the total cost passes $N`;
 }
 
 // A claim of success in the final answer (for "said it was done, but tests fail").
@@ -119,12 +139,18 @@ async function runOne(task, runIndex, opts, outDir) {
     blockedCommands: metrics.blockedCommands,
     finalAnswer: (metrics.finalAnswer || record.text).slice(0, 600),
     errors: record.errors,
+    // A rate limit or provider outage says nothing about the agent: such runs
+    // are reported but left out of the pass rates.
+    infraError: record.errors.some((e) => INFRA_ERROR.test(e)) || INFRA_ERROR.test(record.stderr ?? ""),
   };
+  if (run.infraError && !run.pass) run.reasons.push("provider error (rate limit or outage), not counted");
   appendFileSync(path.join(outDir, "runs.jsonl"), JSON.stringify(run) + "\n");
   return run;
 }
 
-export function summarize(runs, meta) {
+export function summarize(allRuns, meta) {
+  const runs = allRuns.filter((r) => !(r.infraError && !r.pass));
+  const excluded = allRuns.length - runs.length;
   const byTask = new Map();
   for (const r of runs) {
     if (!byTask.has(r.task)) byTask.set(r.task, []);
@@ -161,9 +187,10 @@ export function summarize(runs, meta) {
 
   return {
     ...meta,
-    runsPerTask: Math.max(...tasks.map((t) => t.runs)),
+    excludedRuns: excluded,
+    runsPerTask: tasks.length ? Math.max(...tasks.map((t) => t.runs)) : 0,
     passAt1: mean(tasks.map((t) => t.passes / t.runs)),
-    passAllK: tasks.filter((t) => t.allPassed).length / tasks.length,
+    passAllK: tasks.length ? tasks.filter((t) => t.allPassed).length / tasks.length : NaN,
     categories,
     tasks,
     efficiency: {
@@ -173,7 +200,7 @@ export function summarize(runs, meta) {
       seconds: mean(runs.map((r) => r.durationMs / 1000)),
       costPerPass: passing.length ? sum("cost") / passing.length : NaN,
       cacheHitRate: sum("promptTokens") ? sum("cachedTokens") / sum("promptTokens") : 0,
-      totalCost: sum("cost"),
+      totalCost: allRuns.reduce((n, r) => n + (r.cost ?? 0), 0),
     },
     behaviour: {
       toolCalls: sum("toolCalls"),
@@ -197,6 +224,7 @@ export function renderSummary(s) {
   lines.push(`# DevPilot eval: ${s.label}\n`);
   lines.push(`Model \`${s.model}\` · ${s.tasks.length} tasks × ${s.runsPerTask} run(s) · ${s.date}` + (Object.keys(s.env).length ? ` · env ${Object.entries(s.env).map(([k, v]) => `${k}=${v}`).join(" ")}` : "") + "\n");
   lines.push(`**pass@1 ${pct(s.passAt1)}**` + (s.runsPerTask > 1 ? ` · pass^${s.runsPerTask} ${pct(s.passAllK)}` : "") + ` · total cost $${s.efficiency.totalCost.toFixed(4)}\n`);
+  if (s.excludedRuns) lines.push(`${s.excludedRuns} run(s) hit a provider error (rate limit or outage) and are left out of the numbers below.\n`);
   lines.push(`## By category\n`);
   lines.push(table(["Category", "Tasks", "Pass rate"].concat(s.runsPerTask > 1 ? [`Passed all ${s.runsPerTask}`] : []),
     Object.entries(s.categories).map(([c, v]) => [c, v.tasks, pct(v.passRate)].concat(s.runsPerTask > 1 ? [`${v.allPassed}/${v.tasks}`] : []))));
@@ -229,6 +257,15 @@ async function main() {
   const tasks = loadTasks(opts.tasks);
   if (tasks.length === 0) throw new Error(`No tasks match "${opts.tasks}"`);
 
+  const model = resolveModel(opts);
+  if (opts.freeOnly) {
+    if (!model || !model.endsWith(":free")) {
+      throw new Error(`--free-only: the model is "${model ?? "not set"}", which is not a free model (its id must end in ":free"). Nothing was run.`);
+    }
+    opts.env.OPENROUTER_MODEL = model; // pin it, so nothing else can change it
+    opts.maxCost = Math.min(opts.maxCost, 0);
+  }
+
   const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
   const label = opts.label ?? stamp;
   const outDir = opts.out ? path.resolve(opts.out) : path.join(RESULTS_DIR, label);
@@ -241,14 +278,21 @@ async function main() {
 
   const runs = [];
   let next = 0;
+  let spent = 0;
+  let stopped = null;
   const worker = async () => {
-    while (next < jobs.length) {
+    while (next < jobs.length && !stopped) {
       const { task, run } = jobs[next++];
       const r = await runOne(task, run, opts, outDir);
       runs.push(r);
       const mark = r.pass ? "✓" : "✗";
       console.log(`${mark} ${task.id} #${run + 1}  ${r.apiCalls} calls · $${r.cost.toFixed(4)} · ${Math.round(r.durationMs / 1000)}s${r.reasons.length ? `  (${r.reasons.join("; ")})` : ""}`);
       if (r.status === "fatal") throw new Error(`DevPilot could not start: ${r.reasons.join("; ")}`);
+      spent += r.cost ?? 0;
+      if (spent > opts.maxCost) {
+        stopped = `total cost $${spent.toFixed(4)} passed the limit of $${opts.maxCost}`;
+        console.error(`Stopping: ${stopped}.`);
+      }
     }
   };
   await Promise.all(Array.from({ length: Math.max(1, opts.concurrency) }, worker));
@@ -258,7 +302,8 @@ async function main() {
   const summary = summarize(runs, {
     label,
     date: new Date().toISOString().slice(0, 10),
-    model: opts.model ?? runs.find((r) => r.model)?.model ?? "(from .env)",
+    model: model ?? runs.find((r) => r.model)?.model ?? "(from .env)",
+    stoppedEarly: stopped,
     env: opts.env,
     approve: opts.approve,
   });
