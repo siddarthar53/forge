@@ -1,0 +1,3 @@
+# Eval task files must keep LF line endings on every OS: graders count
+# characters and edits match exact text.
+evals/tasks/** text eol=lf

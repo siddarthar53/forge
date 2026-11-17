@@ -176,9 +176,10 @@ VS Code are the next step.
 
 ## What's next
 
-- **Tier 4: evaluation.** A benchmark of 20 to 50 tasks with hidden tests,
-  measuring pass rate, steps, tokens and cost, then changing one thing at a time
-  (sub-agents on vs off, compaction on vs off) to show the effect. First this
-  needs a headless mode (`devpilot -p "<task>" --auto-approve`).
+- **Tier 4: evaluation, in progress.** [`evals/`](evals/README.md) has a
+  12-task benchmark with hidden tests, driven through `--rpc`, that measures
+  pass rate, cost, tool errors and verification, plus ablations (sub-agents or
+  compaction off) and a deny-list safety corpus. First result: the deny list
+  blocks 61% of disguised dangerous commands. Model results come next.
 - **Not built yet:** hooks, skills, custom slash commands, web search, `@file`
   mentions, opening PRs, a GitHub Action, OAuth for remote MCP servers.

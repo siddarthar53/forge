@@ -69,10 +69,12 @@ export async function createApp({ client, config, cwd = process.cwd(), ask, appr
 
   // Sub-agents pick their tools from everything registered so far (built-in
   // and MCP); then the task tool that starts them is added last.
-  const agents = loadAgents(cwd);
-  registerTools([createTaskTool(agents.agents)]);
+  // DEVPILOT_SUBAGENTS=0 leaves the task tool out (used by the evals to
+  // measure what sub-agents are worth).
+  const agents = config.subagents === false ? { agents: [], errors: [] } : loadAgents(cwd);
+  if (agents.agents.length) registerTools([createTaskTool(agents.agents)]);
 
-  const systemPrompt = buildSystemPrompt({ cwd, sandbox: config.sandbox, extraSections: [mcp.promptSection()] });
+  const systemPrompt = buildSystemPrompt({ cwd, sandbox: config.sandbox, extraSections: [mcp.promptSection()], subagents: agents.agents.length > 0 });
   const checkpoints = createCheckpoints();
 
   // Files the model has read, mapped to their modified-time at that moment.

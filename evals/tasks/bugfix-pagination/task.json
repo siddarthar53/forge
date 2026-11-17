@@ -1,0 +1,11 @@
+{
+  "id": "bugfix-pagination",
+  "category": "bugfix",
+  "prompt": "The tests in test/paginate.test.js fail. Make them pass. Do not change the tests.",
+  "check": {
+    "type": "tests",
+    "protect": [
+      "test/paginate.test.js"
+    ]
+  }
+}

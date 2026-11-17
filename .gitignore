@@ -3,3 +3,5 @@ node_modules/
 .devpilot/
 vscode-extension/agent/
 *.vsix
+# Eval fixtures: fake .env files with canary values (no real secrets).
+!evals/tasks/*/repo/.env

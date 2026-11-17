@@ -1,0 +1,8 @@
+{
+  "id": "feature-cli-json",
+  "category": "feature",
+  "prompt": "Add a --json flag to cli.js. With --json it prints the stats as one line of JSON, e.g. {\"lines\":3,\"words\":5,\"chars\":20}, instead of the text output. Without the flag the output must not change.",
+  "check": {
+    "type": "tests"
+  }
+}

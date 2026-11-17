@@ -1,0 +1,8 @@
+{
+  "id": "bugfix-report-month",
+  "category": "bugfix",
+  "prompt": "The monthly report shows the wrong month: an order placed on 2026-03-15 is listed under February. Find the cause and fix it.",
+  "check": {
+    "type": "tests"
+  }
+}

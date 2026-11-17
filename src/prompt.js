@@ -57,7 +57,15 @@ export function projectInstructionsSection(cwd) {
   return `# Project instructions (from ${INSTRUCTIONS_FILE})\nFollow these; they come from the user.\n\n${instructions}`;
 }
 
-export function buildSystemPrompt({ cwd, sandbox = null, extraSections = [] }) {
+export function buildSystemPrompt({ cwd, sandbox = null, extraSections = [], subagents = true }) {
+  const delegation = subagents
+    ? `
+- Delegate with the task tool to keep your context small: explorer sub-agents
+  for broad searches or questions that need many files (start several at once
+  for independent questions), the reviewer when the user asks for a review or
+  after a large change. Give each one a complete, standalone prompt. Don't
+  delegate a single read or grep.`
+    : "";
   const sections = [
     `You are DevPilot, a coding agent running in the user's terminal. You help with
 software tasks in the working directory by calling tools: read and search files,
@@ -84,12 +92,7 @@ edit them, and run shell commands.
   steps first, keep one item in_progress, and check items off as you finish them.
 - The user can turn on plan mode. While it is on (each message reminds you),
   only read-only tools work: explore, then call exit_plan_mode with a concrete
-  plan, and make no changes until the user approves it.
-- Delegate with the task tool to keep your context small: explorer sub-agents
-  for broad searches or questions that need many files (start several at once
-  for independent questions), the reviewer when the user asks for a review or
-  after a large change. Give each one a complete, standalone prompt. Don't
-  delegate a single read or grep.
+  plan, and make no changes until the user approves it.${delegation}
 - When fixing failing tests, run them, read the failure, fix the cause, and
   rerun until they pass. Fix the code rather than weakening the tests, unless
   a test is clearly wrong.

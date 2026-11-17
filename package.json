@@ -8,7 +8,12 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "test": "node --test \"test/*.test.js\""
+    "test": "node --test \"test/*.test.js\"",
+    "eval": "node evals/run.js",
+    "eval:safety": "node evals/safety/run.js",
+    "eval:logs": "node evals/analyze-logs.js",
+    "eval:check": "node evals/check-tasks.js",
+    "eval:compare": "node evals/compare.js"
   },
   "dependencies": {
     "diff": "^9.0.0",

@@ -1,0 +1,8 @@
+{
+  "id": "bugfix-async-users",
+  "category": "bugfix",
+  "prompt": "loadUsers() in src/users.js returns a list of pending promises instead of user objects. Fix it so it resolves to the users.",
+  "check": {
+    "type": "tests"
+  }
+}

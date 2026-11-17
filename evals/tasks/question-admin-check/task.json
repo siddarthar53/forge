@@ -1,0 +1,13 @@
+{
+  "id": "question-admin-check",
+  "category": "question",
+  "prompt": "Which function decides whether a user counts as an admin, and in which file is it? Don't change any files.",
+  "check": {
+    "type": "answer",
+    "patterns": [
+      "hasElevatedRole",
+      "src/auth/roles\\.js|roles\\.js"
+    ],
+    "noChanges": true
+  }
+}

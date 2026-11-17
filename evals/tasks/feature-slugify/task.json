@@ -1,0 +1,8 @@
+{
+  "id": "feature-slugify",
+  "category": "feature",
+  "prompt": "Add an exported function slugify(title) to src/strings.js. It lowercases, turns any run of characters other than a-z and 0-9 into a single hyphen, and removes hyphens at the start and end. Example: '  Hello, World! 2026 ' -> 'hello-world-2026'.",
+  "check": {
+    "type": "tests"
+  }
+}

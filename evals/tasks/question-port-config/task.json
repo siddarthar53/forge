@@ -1,0 +1,13 @@
+{
+  "id": "question-port-config",
+  "category": "question",
+  "prompt": "What port does this server listen on by default, and which environment variable changes it? Don't change any files.",
+  "check": {
+    "type": "answer",
+    "patterns": [
+      "8081",
+      "APP_PORT"
+    ],
+    "noChanges": true
+  }
+}
