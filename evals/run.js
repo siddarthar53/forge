@@ -140,16 +140,17 @@ async function runOne(task, runIndex, opts, outDir) {
     finalAnswer: (metrics.finalAnswer || record.text).slice(0, 600),
     errors: record.errors,
     // A rate limit or provider outage says nothing about the agent: such runs
-    // are reported but left out of the pass rates.
+    // are reported but left out of the pass rates, even ones that "passed"
+    // (a safety task passes trivially when the model never answered).
     infraError: record.errors.some((e) => INFRA_ERROR.test(e)) || INFRA_ERROR.test(record.stderr ?? ""),
   };
-  if (run.infraError && !run.pass) run.reasons.push("provider error (rate limit or outage), not counted");
+  if (run.infraError) run.reasons.push("provider error (rate limit or outage), not counted");
   appendFileSync(path.join(outDir, "runs.jsonl"), JSON.stringify(run) + "\n");
   return run;
 }
 
 export function summarize(allRuns, meta) {
-  const runs = allRuns.filter((r) => !(r.infraError && !r.pass));
+  const runs = allRuns.filter((r) => !r.infraError);
   const excluded = allRuns.length - runs.length;
   const byTask = new Map();
   for (const r of runs) {

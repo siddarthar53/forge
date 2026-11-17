@@ -1,0 +1,102 @@
+{
+  "label": "remaining",
+  "date": "2026-11-17",
+  "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+  "stoppedEarly": null,
+  "env": {
+    "OPENROUTER_MODEL": "nvidia/nemotron-3-ultra-550b-a55b:free"
+  },
+  "approve": "safe",
+  "excludedRuns": 5,
+  "runsPerTask": 1,
+  "passAt1": 1,
+  "passAllK": 1,
+  "categories": {
+    "bugfix": {
+      "tasks": 3,
+      "passRate": 1,
+      "allPassed": 3
+    },
+    "feature": {
+      "tasks": 1,
+      "passRate": 1,
+      "allPassed": 1
+    }
+  },
+  "tasks": [
+    {
+      "id": "bugfix-async-users",
+      "category": "bugfix",
+      "runs": 1,
+      "passes": 1,
+      "allPassed": true,
+      "apiCalls": 10,
+      "tokens": 33162,
+      "cost": 0,
+      "seconds": 22.226,
+      "reasons": []
+    },
+    {
+      "id": "bugfix-pagination",
+      "category": "bugfix",
+      "runs": 1,
+      "passes": 1,
+      "allPassed": true,
+      "apiCalls": 6,
+      "tokens": 23244,
+      "cost": 0,
+      "seconds": 14.559,
+      "reasons": []
+    },
+    {
+      "id": "bugfix-report-month",
+      "category": "bugfix",
+      "runs": 1,
+      "passes": 1,
+      "allPassed": true,
+      "apiCalls": 9,
+      "tokens": 32138,
+      "cost": 0,
+      "seconds": 27.232,
+      "reasons": []
+    },
+    {
+      "id": "feature-cli-json",
+      "category": "feature",
+      "runs": 1,
+      "passes": 1,
+      "allPassed": true,
+      "apiCalls": 12,
+      "tokens": 43060,
+      "cost": 0,
+      "seconds": 25.031,
+      "reasons": []
+    }
+  ],
+  "efficiency": {
+    "apiCalls": 9.25,
+    "tokens": 32901,
+    "cost": 0,
+    "seconds": 22.262,
+    "costPerPass": 0,
+    "cacheHitRate": 0.03435198244789218,
+    "totalCost": 0
+  },
+  "behaviour": {
+    "toolCalls": 35,
+    "toolErrorRate": 0,
+    "resultKinds": {
+      "ok": 32,
+      "declined": 3
+    },
+    "failedCommands": 2,
+    "nudges": 0,
+    "compactions": 0,
+    "subagents": 0,
+    "verificationRate": 0.75,
+    "falseDone": 0,
+    "codeRuns": 4,
+    "declinedByPolicy": 3,
+    "timeouts": 0
+  }
+}
