@@ -179,7 +179,9 @@ VS Code are the next step.
 - **Tier 4: evaluation, in progress.** [`evals/`](evals/README.md) has a
   12-task benchmark with hidden tests, driven through `--rpc`, that measures
   pass rate, cost, tool errors and verification, plus ablations (sub-agents or
-  compaction off) and a deny-list safety corpus. First result: the deny list
-  blocks 61% of disguised dangerous commands. Model results come next.
+  compaction off) and a deny-list safety corpus. First results: on a free model
+  DevPilot passes [11 of 12 tasks](evals/results/baseline/summary.md), but it
+  re-asks after a declined command and skips running the tests after a third of
+  its edits. The deny list blocks 61% of disguised dangerous commands.
 - **Not built yet:** hooks, skills, custom slash commands, web search, `@file`
   mentions, opening PRs, a GitHub Action, OAuth for remote MCP servers.

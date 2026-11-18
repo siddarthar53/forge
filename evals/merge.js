@@ -29,6 +29,11 @@ for (const source of sources) {
   if (existsSync(logs)) for (const f of readdirSync(logs)) copyFileSync(path.join(logs, f), path.join(outDir, "logs", f));
 }
 
+// A task re-run after a rate limit: keep the real attempt, drop the failed one.
+const hasRealRun = new Set(runs.filter((r) => !r.infraError).map((r) => r.task));
+const kept = runs.filter((r) => !(r.infraError && hasRealRun.has(r.task)));
+runs.length = 0;
+runs.push(...kept);
 runs.sort((a, b) => a.task.localeCompare(b.task) || a.run - b.run);
 const models = [...new Set(metas.map((m) => m.model))];
 const summary = summarize(runs, {
